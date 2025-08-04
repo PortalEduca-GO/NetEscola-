@@ -6,17 +6,73 @@ import { GEMINI_MODEL_TEXT, DEFAULT_SUBJECT_PERFORMANCE_THRESHOLD, SCHOOL_GRADES
 
 let aiInstance: GoogleGenAI | null = null;
 
+// Rate limiting
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 1000; // 1 segundo entre requests
+
+// Função para aguardar intervalo mínimo entre requests
+async function waitForRateLimit() {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  
+  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+    const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+  }
+  
+  lastRequestTime = Date.now();
+}
+
+// Função de retry com backoff exponencial
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>, 
+  maxRetries: number = 3, 
+  baseDelay: number = 1000
+): Promise<T> {
+  let lastError: Error;
+  
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      if (i > 0) {
+        const delay = baseDelay * Math.pow(2, i - 1);
+        console.log(`Tentativa ${i + 1}/${maxRetries + 1} após ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      await waitForRateLimit();
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      console.warn(`Erro na tentativa ${i + 1}:`, error);
+      
+      // Se não é erro de rate limit, não retry
+      if (!error.message?.includes('429') && !error.message?.includes('quota')) {
+        break;
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 // Inicializa a instância da IA de forma preguiçosa (lazy) para evitar crash na inicialização
 function getAiInstance(): GoogleGenAI {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY || process.env.API_KEY;
   console.log("API Key disponível:", apiKey ? "Sim" : "Não");
-  console.log("Environment:", import.meta.env.MODE);
+  console.log("Environment:", typeof import.meta !== 'undefined' ? import.meta.env?.MODE : 'node');
+  
   if (!apiKey) {
-    // Este erro será capturado pelo bloco try-catch da função que o chamou
+    console.error("Nenhuma API key encontrada. Verificando variáveis:", {
+      VITE_GEMINI_API_KEY: !!import.meta.env?.VITE_GEMINI_API_KEY,
+      VITE_API_KEY: !!import.meta.env?.VITE_API_KEY,
+      process_API_KEY: !!process.env?.API_KEY
+    });
     throw new Error("A chave da API do Gemini não está configurada. A funcionalidade de IA está desativada.");
   }
+  
   if (!aiInstance) {
     aiInstance = new GoogleGenAI({ apiKey });
+    console.log("Instância do GoogleGenAI criada com sucesso");
   }
   return aiInstance;
 }
@@ -41,29 +97,30 @@ Exemplo de formato para uma pergunta:
     prompt += "\nAs perguntas iniciantes devem ser sobre conceitos fundamentais do tema."
   }
 
-
   try {
-    const ai = getAiInstance();
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL_TEXT,
-      contents: prompt
-    });
-    
-    let jsonStr = response.text.trim();
-    const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
-    const match = jsonStr.match(fenceRegex);
-    if (match && match[2]) {
-      jsonStr = match[2].trim();
-    }
+    return await retryWithBackoff(async () => {
+      const ai = getAiInstance();
+      const response = await ai.models.generateContent({
+        model: GEMINI_MODEL_TEXT,
+        contents: prompt
+      });
+      
+      let jsonStr = response.text.trim();
+      const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
+      const match = jsonStr.match(fenceRegex);
+      if (match && match[2]) {
+        jsonStr = match[2].trim();
+      }
 
-    const parsedData = JSON.parse(jsonStr);
-    if (Array.isArray(parsedData) && parsedData.every(item => 'question' in item && 'options' in item && 'correctAnswer' in item && 'explanation' in item)) {
-        return parsedData as QuizQuestion[];
-    }
-    console.error("Failed to parse quiz questions or structure is incorrect:", parsedData);
-    return null;
+      const parsedData = JSON.parse(jsonStr);
+      if (Array.isArray(parsedData) && parsedData.every(item => 'question' in item && 'options' in item && 'correctAnswer' in item && 'explanation' in item)) {
+          return parsedData as QuizQuestion[];
+      }
+      console.error("Failed to parse quiz questions or structure is incorrect:", parsedData);
+      return null;
+    });
   } catch (error) {
-    console.error("Error generating quiz:", error);
+    console.error("Error generating quiz after retries:", error);
     return null;
   }
 }
@@ -83,15 +140,23 @@ export async function generateVideoJustification(video: VideoRecommendation, ana
   `;
 
   try {
-    const ai = getAiInstance();
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL_TEXT,
-      contents: prompt
-    });
-    return response.text;
+    return await retryWithBackoff(async () => {
+      const ai = getAiInstance();
+      const response = await ai.models.generateContent({
+        model: GEMINI_MODEL_TEXT,
+        contents: prompt
+      });
+      return response.text;
+    }, 2, 500); // Menos retries para justificativas
   } catch (error) {
-    console.error("Error generating video justification:", error);
-    return "Este vídeo é recomendado para expandir seus conhecimentos sobre o tema!";
+    console.error("Error generating video justification after retries:", error);
+    
+    // Fallback inteligente baseado na matéria e dificuldades
+    if (difficultSubjects.includes(video.subject)) {
+      return `Este vídeo sobre ${video.subject} foi especialmente selecionado para ajudar você a fortalecer seus conhecimentos nesta disciplina. Com explicações claras e didáticas, é uma ótima oportunidade para esclarecer dúvidas e melhorar seu desempenho!`;
+    }
+    
+    return `Este vídeo sobre ${video.subject} é perfeito para expandir seus conhecimentos e complementar seus estudos. O conteúdo é adequado para sua série e vai contribuir muito para seu aprendizado!`;
   }
 }
 
@@ -134,14 +199,28 @@ export async function generatePerformanceSummary(student: Student, analysisData:
   `;
 
   try {
-    const ai = getAiInstance();
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL_TEXT,
-      contents: prompt
+    return await retryWithBackoff(async () => {
+      const ai = getAiInstance();
+      const response = await ai.models.generateContent({
+        model: GEMINI_MODEL_TEXT,
+        contents: prompt
+      });
+      return response.text;
     });
-    return response.text;
   } catch (error) {
-    console.error("Error generating performance summary:", error);
-    return "Não foi possível gerar um resumo do seu desempenho no momento. Mas continue se esforçando, você está no caminho certo!";
+    console.error("Error generating performance summary after retries:", error);
+    // Fallback mais inteligente baseado nos dados
+    const bestSubjects = performance
+      .sort((a, b) => b.grade - a.grade)
+      .slice(0, 3)
+      .map(p => p.subject);
+    
+    const worstSubjects = performance
+      .filter(p => p.grade < 60)
+      .sort((a, b) => a.grade - b.grade)
+      .slice(0, 2)
+      .map(p => p.subject);
+
+    return `Parabéns, ${studentFirstName}! Você está se destacando em ${bestSubjects.join(', ')}, mostrando sua dedicação e interesse por essas áreas. ${worstSubjects.length > 0 ? `Para alcançar ainda melhores resultados, que tal dedicar um pouco mais de atenção às disciplinas de ${worstSubjects.join(' e ')}? Com um pouquinho mais de foco nessas matérias, tenho certeza que você vai conseguir excelentes resultados!` : 'Continue assim, você está no caminho certo!'} Acredite no seu potencial! 🌟`;
   }
 }
