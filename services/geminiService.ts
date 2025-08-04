@@ -8,10 +8,19 @@ let aiInstance: GoogleGenAI | null = null;
 
 // Rate limiting
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 1000; // 1 segundo entre requests
+const MIN_REQUEST_INTERVAL = 3000; // 3 segundos entre requests para máxima estabilidade
+
+// Controle de requests simultâneos
+let activeRequests = 0;
+const MAX_CONCURRENT_REQUESTS = 1; // Apenas 1 request por vez
 
 // Função para aguardar intervalo mínimo entre requests
 async function waitForRateLimit() {
+  // Aguarda até que haja slot disponível para requests
+  while (activeRequests >= MAX_CONCURRENT_REQUESTS) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
   const now = Date.now();
   const timeSinceLastRequest = now - lastRequestTime;
   
@@ -20,7 +29,13 @@ async function waitForRateLimit() {
     await new Promise(resolve => setTimeout(resolve, waitTime));
   }
   
+  activeRequests++;
   lastRequestTime = Date.now();
+}
+
+// Função para liberar slot de request
+function releaseRequest() {
+  activeRequests = Math.max(0, activeRequests - 1);
 }
 
 // Função de retry com backoff exponencial
@@ -40,8 +55,11 @@ async function retryWithBackoff<T>(
       }
       
       await waitForRateLimit();
-      return await fn();
+      const result = await fn();
+      releaseRequest(); // Libera o slot após sucesso
+      return result;
     } catch (error) {
+      releaseRequest(); // Libera o slot após erro
       lastError = error as Error;
       console.warn(`Erro na tentativa ${i + 1}:`, error);
       
@@ -147,7 +165,7 @@ export async function generateVideoJustification(video: VideoRecommendation, ana
         contents: prompt
       });
       return response.text;
-    }, 2, 500); // Menos retries para justificativas
+    }, 1, 1000); // Apenas 1 retry para justificativas, com delay maior
   } catch (error) {
     console.error("Error generating video justification after retries:", error);
     

@@ -80,7 +80,7 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
     });
     
     // 4. Generate justifications for the top N videos to provide context.
-    const videosToJustify = sortedVideos.slice(0, 9); 
+    const videosToJustify = sortedVideos.slice(0, 3); // Reduzido de 9 para 3 para evitar rate limits 
     
     // Process sequentially to avoid rate limiting
     const justifiedVideos = [];
