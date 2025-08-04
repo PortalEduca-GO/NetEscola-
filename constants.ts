@@ -260,4 +260,4 @@ export const ALL_VIDEOS: VideoRecommendation[] = filterVideosByAllowedGrades(RAW
 
 export const DEFAULT_SUBJECT_PERFORMANCE_THRESHOLD = 60; 
 
-export const GEMINI_MODEL_TEXT = 'gemini-2.5-flash';
+export const GEMINI_MODEL_TEXT = 'gemini-2.0-flash-exp';

@@ -1,6 +1,6 @@
 
 
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { Quiz, QuizDifficulty, QuizQuestion, VideoRecommendation, AnalysisData, GroundingChunk, SchoolGrade, Bimester, SchoolReportAnalysisResult, SubjectPerformance, Student } from '../types';
 import { GEMINI_MODEL_TEXT, DEFAULT_SUBJECT_PERFORMANCE_THRESHOLD, SCHOOL_GRADES_OPTIONS } from "../constants";
 
@@ -8,7 +8,8 @@ let aiInstance: GoogleGenAI | null = null;
 
 // Inicializa a instância da IA de forma preguiçosa (lazy) para evitar crash na inicialização
 function getAiInstance(): GoogleGenAI {
-  const apiKey = process.env.API_KEY;
+  const apiKey = process.env.API_KEY || process.env.VITE_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  console.log("API Key disponível:", apiKey ? "Sim" : "Não");
   if (!apiKey) {
     // Este erro será capturado pelo bloco try-catch da função que o chamou
     throw new Error("A chave da API do Gemini não está configurada. A funcionalidade de IA está desativada.");
@@ -42,13 +43,9 @@ Exemplo de formato para uma pergunta:
 
   try {
     const ai = getAiInstance();
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    const response = await ai.models.generateContent({
       model: GEMINI_MODEL_TEXT,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        temperature: difficulty === QuizDifficulty.AVANCADO ? 0.6 : (difficulty === QuizDifficulty.INTERMEDIARIO ? 0.4 : 0.2), 
-      }
+      contents: prompt
     });
     
     let jsonStr = response.text.trim();
@@ -86,10 +83,9 @@ export async function generateVideoJustification(video: VideoRecommendation, ana
 
   try {
     const ai = getAiInstance();
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    const response = await ai.models.generateContent({
       model: GEMINI_MODEL_TEXT,
-      contents: prompt,
-      config: { temperature: 0.7 }
+      contents: prompt
     });
     return response.text;
   } catch (error) {
@@ -102,12 +98,9 @@ export async function generateVideoJustification(video: VideoRecommendation, ana
 export async function getInformationWithSearch(query: string): Promise<{ text: string; sources: GroundingChunk[] }> {
   try {
     const ai = getAiInstance();
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    const response = await ai.models.generateContent({
       model: GEMINI_MODEL_TEXT, 
-      contents: query,
-      config: {
-        tools: [{ googleSearch: {} }],
-      },
+      contents: query
     });
     const text = response.text;
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
@@ -141,10 +134,9 @@ export async function generatePerformanceSummary(student: Student, analysisData:
 
   try {
     const ai = getAiInstance();
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    const response = await ai.models.generateContent({
       model: GEMINI_MODEL_TEXT,
-      contents: prompt,
-      config: { temperature: 0.6 }
+      contents: prompt
     });
     return response.text;
   } catch (error) {
