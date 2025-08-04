@@ -8,8 +8,9 @@ let aiInstance: GoogleGenAI | null = null;
 
 // Inicializa a instância da IA de forma preguiçosa (lazy) para evitar crash na inicialização
 function getAiInstance(): GoogleGenAI {
-  const apiKey = process.env.API_KEY || process.env.VITE_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY || process.env.API_KEY;
   console.log("API Key disponível:", apiKey ? "Sim" : "Não");
+  console.log("Environment:", import.meta.env.MODE);
   if (!apiKey) {
     // Este erro será capturado pelo bloco try-catch da função que o chamou
     throw new Error("A chave da API do Gemini não está configurada. A funcionalidade de IA está desativada.");
