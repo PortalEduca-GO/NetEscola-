@@ -116,7 +116,7 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
     } else {
         setIsComponentReady(true);
     }
-  }, [analysisData, filterAndPrepareVideos]);
+  }, [analysisData]); // Removendo filterAndPrepareVideos das dependências
 
   const handleSubjectFilterChange = (subject: string) => {
     setSelectedFilterSubjects(prev => {
@@ -130,10 +130,10 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
     });
   };
 
-  const handleRefineSearch = () => {
+  const handleRefineSearch = async () => {
     if (analysisData) {
         setActivelyFiltered(true);
-        filterAndPrepareVideos(analysisData);
+        await filterAndPrepareVideos(analysisData);
         if (window.innerWidth < 768) { 
           setIsSidebarOpen(false);
         }
