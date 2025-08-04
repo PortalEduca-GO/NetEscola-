@@ -1,4 +1,4 @@
-import { Student, StudentGradeRecord, CurriculumPlan, SchoolGrade } from '../types';
+import { Student, StudentGradeRecord, CurriculumPlan, SchoolGrade } from './types';
 
 export const students: Student[] = [
     {
