@@ -54,7 +54,7 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
 
     // 2. If user is actively filtering, apply that filter to the pool.
     if (activelyFiltered && selectedFilterSubjects.size > 0) {
-        const filterSubjectsLower = Array.from(selectedFilterSubjects).map(s => s.toLowerCase());
+        const filterSubjectsLower = Array.from(selectedFilterSubjects).map((s: string) => s.toLowerCase());
         baseVideoPool = baseVideoPool.filter(video => filterSubjectsLower.includes(video.subject.toLowerCase()));
     }
 
@@ -81,15 +81,16 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
     
     // 4. Generate justifications for the top N videos to provide context.
     const videosToJustify = sortedVideos.slice(0, 9); 
-    const justifiedVideos = await Promise.all(
-      videosToJustify.map(async (video) => {
-        const needsJustification = !video.justification || video.justification.trim() === "" || video.justification.includes("geral");
-        const justification = needsJustification && data.performance.length > 0 
-                              ? await generateVideoJustification(video, data) 
-                              : (video.justification || "Vídeo recomendado para complementar seus estudos.");
-        return { ...video, justification };
-      })
-    );
+    
+    // Process sequentially to avoid rate limiting
+    const justifiedVideos = [];
+    for (const video of videosToJustify) {
+      const needsJustification = !video.justification || video.justification.trim() === "" || video.justification.includes("geral");
+      const justification = needsJustification && data.performance.length > 0 
+                            ? await generateVideoJustification(video, data) 
+                            : (video.justification || "Vídeo recomendado para complementar seus estudos.");
+      justifiedVideos.push({ ...video, justification });
+    }
     
     const remainingVideos = sortedVideos.slice(videosToJustify.length);
     
