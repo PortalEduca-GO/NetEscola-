@@ -1,10 +1,11 @@
 
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import HomePage from './components/HomePage';
 import LoginPage from './components/LoginPage';
 import StudentDashboard from './components/StudentDashboard';
+import Notification from './components/Notification';
 import { Student, VideoRecommendation, QuizDifficulty, QuizQuestion } from './types';
 import { generateQuizForVideo } from './services/geminiService';
 import Footer from './components/Footer';
@@ -14,6 +15,7 @@ export type View = 'home' | 'login' | 'dashboard';
 export const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('home');
   const [currentUser, setCurrentUser] = useState<Student | null>(null);
+  const [showNotification, setShowNotification] = useState(false);
   
   const [dashboardKey, setDashboardKey] = useState(0);
 
@@ -59,6 +61,37 @@ export const App: React.FC = () => {
     setIsQuizLoading(false);
   }, [currentQuizVideo, currentQuizDifficulty]);
 
+  const handleReportVideoIssue = useCallback((videoId: string, issueType: string) => {
+    // Em produção, isso seria enviado para um sistema de analytics ou API
+    const reportData = {
+      videoId,
+      issueType,
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      url: window.location.href,
+      userId: currentUser?.id
+    };
+    
+    console.log('Video issue reported:', reportData);
+    
+    // Aqui você poderia enviar para um serviço de analytics
+    // analytics.track('video_issue_reported', reportData);
+    
+    // Ou salvar no localStorage para análise posterior
+    const existingReports = JSON.parse(localStorage.getItem('videoIssueReports') || '[]');
+    existingReports.push(reportData);
+    localStorage.setItem('videoIssueReports', JSON.stringify(existingReports));
+  }, [currentUser]);
+
+  useEffect(() => {
+    // Mostra a notificação sobre as melhorias implementadas apenas uma vez
+    const hasSeenVideoFix = localStorage.getItem('hasSeenVideoFixNotification');
+    if (!hasSeenVideoFix) {
+      setShowNotification(true);
+      localStorage.setItem('hasSeenVideoFixNotification', 'true');
+    }
+  }, []);
+
 
   const renderView = () => {
     switch (currentView) {
@@ -80,6 +113,7 @@ export const App: React.FC = () => {
             currentQuizVideo={currentQuizVideo}
             currentQuizDifficulty={currentQuizDifficulty}
             isQuizLoading={isQuizLoading}
+            onReportVideoIssue={handleReportVideoIssue}
           />
         );
       default:
@@ -89,6 +123,14 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen">
+      {showNotification && (
+        <Notification
+          message="✅ Melhorias implementadas: Sistema de vídeos aprimorado com melhor suporte a playlists e detecção de problemas!"
+          type="success"
+          duration={8000}
+          onClose={() => setShowNotification(false)}
+        />
+      )}
       <Navbar 
         onNavigate={handleNavigate}
         currentUser={currentUser}

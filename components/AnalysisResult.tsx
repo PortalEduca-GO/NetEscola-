@@ -17,6 +17,7 @@ interface AnalysisResultProps {
   currentQuizVideo: VideoRecommendation | null;
   currentQuizDifficulty: QuizDifficulty | null;
   isQuizLoading: boolean;
+  onReportVideoIssue?: (videoId: string, issueType: string) => void;
 }
 
 const AnalysisResult: React.FC<AnalysisResultProps> = ({ 
@@ -26,7 +27,8 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
     currentQuiz,
     currentQuizVideo,
     currentQuizDifficulty,
-    isQuizLoading
+    isQuizLoading,
+    onReportVideoIssue
 }) => {
   const [selectedVideo, setSelectedVideo] = useState<VideoRecommendation | null>(null);
   const [recommendedVideos, setRecommendedVideos] = useState<VideoRecommendation[]>([]);
@@ -282,6 +284,7 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
           currentQuizVideo={currentQuizVideo}
           currentQuizDifficulty={currentQuizDifficulty}
           isQuizLoading={isQuizLoading}
+          onReportVideoIssue={onReportVideoIssue}
         />
       )}
     </div>

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { VideoRecommendation, QuizDifficulty, QuizQuestion } from '../types';
 import QuizComponent from './Quiz';
+import VideoErrorHandler from './VideoErrorHandler';
 import { generateQuizForVideo } from '../services/geminiService';
 import { DocumentArrowDownIcon, LightBulbIcon } from './icons';
 import LoadingSpinner from './LoadingSpinner';
@@ -14,6 +15,7 @@ interface VideoModalProps {
   currentQuizVideo: VideoRecommendation | null;
   currentQuizDifficulty: QuizDifficulty | null;
   isQuizLoading: boolean;
+  onReportVideoIssue?: (videoId: string, issueType: string) => void;
 }
 
 const VideoModal: React.FC<VideoModalProps> = ({ 
@@ -23,15 +25,47 @@ const VideoModal: React.FC<VideoModalProps> = ({
     currentQuiz,
     currentQuizVideo,
     currentQuizDifficulty,
-    isQuizLoading 
+    isQuizLoading,
+    onReportVideoIssue
 }) => {
 
   if (!video) return null;
 
   const getYouTubeEmbedUrl = (url: string) => {
     try {
+      // Verifica se é uma URL de playlist direta
+      const playlistDirectMatch = url.match(/youtube\.com\/playlist\?list=([a-zA-Z0-9_-]+)/);
+      if (playlistDirectMatch) {
+        return `https://www.youtube.com/embed/videoseries?list=${playlistDirectMatch[1]}`;
+      }
+      
+      // Primeiro, verifica se é uma URL de playlist
+      const playlistMatch = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+      
+      // Extrai o ID do vídeo
       const videoIdMatch = url.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-      return videoIdMatch ? `https://www.youtube.com/embed/${videoIdMatch[1]}` : null;
+      
+      // Se o v= contém "videoseries", tenta usar apenas a playlist
+      if (url.includes('v=videoseries') && playlistMatch) {
+        return `https://www.youtube.com/embed/videoseries?list=${playlistMatch[1]}`;
+      }
+      
+      // Se tem um ID de vídeo válido
+      if (videoIdMatch && videoIdMatch[1] !== 'videoseries') {
+        let embedUrl = `https://www.youtube.com/embed/${videoIdMatch[1]}`;
+        // Adiciona a playlist se existir
+        if (playlistMatch) {
+          embedUrl += `?list=${playlistMatch[1]}`;
+        }
+        return embedUrl;
+      }
+      
+      // Se só tem playlist, usa o primeiro vídeo da playlist
+      if (playlistMatch) {
+        return `https://www.youtube.com/embed/videoseries?list=${playlistMatch[1]}`;
+      }
+      
+      return null;
     } catch (error) {
       console.error("Error parsing YouTube URL:", error);
       return null;
@@ -75,9 +109,10 @@ const VideoModal: React.FC<VideoModalProps> = ({
             ></iframe>
           </div>
         ) : (
-          <div className="w-full aspect-video mb-4 rounded-lg overflow-hidden shadow-md bg-gray-200 flex items-center justify-center">
-             <p className="text-gray-500 p-4 text-center">Link do vídeo inválido ou não foi possível carregar.</p>
-          </div>
+          <VideoErrorHandler 
+            video={video} 
+            onReportIssue={onReportVideoIssue}
+          />
         )}
 
         <div className="mb-4">

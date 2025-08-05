@@ -16,6 +16,7 @@ interface StudentDashboardProps {
   currentQuizVideo: VideoRecommendation | null;
   currentQuizDifficulty: QuizDifficulty | null;
   isQuizLoading: boolean;
+  onReportVideoIssue?: (videoId: string, issueType: string) => void;
 }
 
 const bimesterMap: { [key: string]: number } = {
@@ -90,7 +91,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = (props) => {
       <AnalysisResult 
         analysisData={analysisData}
         onResetAnalysis={handleBackToSelection}
-        {...props}
+        onSelectVideoForQuiz={props.onSelectVideoForQuiz}
+        currentQuiz={props.currentQuiz}
+        currentQuizVideo={props.currentQuizVideo}
+        currentQuizDifficulty={props.currentQuizDifficulty}
+        isQuizLoading={props.isQuizLoading}
+        onReportVideoIssue={props.onReportVideoIssue}
       />
     );
   }
