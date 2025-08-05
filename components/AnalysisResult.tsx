@@ -6,6 +6,7 @@ import { DEFAULT_SUBJECT_PERFORMANCE_THRESHOLD, ALL_VIDEOS } from '../constants'
 import VideoCard from './VideoCard';
 import VideoModal from './VideoModal';
 import { generateVideoJustification } from '../services/geminiService';
+import { videoValidationService } from '../services/videoValidationService';
 import LoadingSpinner from './LoadingSpinner';
 import { ArrowLeftIcon, LightBulbIcon, AdjustmentsHorizontalIcon } from './icons'; 
 
@@ -81,8 +82,12 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
         return a.title.localeCompare(b.title); // Final deterministic sort
     });
     
-    // 4. Generate justifications for the top N videos to provide context.
-    const videosToJustify = sortedVideos.slice(0, 3); // Reduzido de 9 para 3 para evitar rate limits 
+    // 4. Validate videos to ensure they're available
+    setIsLoadingRecommendations(true);
+    const validVideos = await videoValidationService.filterValidVideos(sortedVideos);
+    
+    // 5. Generate justifications for the top N videos to provide context.
+    const videosToJustify = validVideos.slice(0, 3); // Reduzido de 9 para 3 para evitar rate limits 
     
     // Process sequentially to avoid rate limiting
     const justifiedVideos = [];
@@ -94,7 +99,7 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
       justifiedVideos.push({ ...video, justification });
     }
     
-    const remainingVideos = sortedVideos.slice(videosToJustify.length);
+    const remainingVideos = validVideos.slice(videosToJustify.length);
     
     setRecommendedVideos([...justifiedVideos, ...remainingVideos]);
     setIsLoadingRecommendations(false);

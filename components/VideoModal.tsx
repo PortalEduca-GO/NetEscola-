@@ -4,6 +4,7 @@ import { VideoRecommendation, QuizDifficulty, QuizQuestion } from '../types';
 import QuizComponent from './Quiz';
 import VideoErrorHandler from './VideoErrorHandler';
 import { generateQuizForVideo } from '../services/geminiService';
+import { videoValidationService } from '../services/videoValidationService';
 import { DocumentArrowDownIcon, LightBulbIcon } from './icons';
 import LoadingSpinner from './LoadingSpinner';
 
@@ -28,51 +29,38 @@ const VideoModal: React.FC<VideoModalProps> = ({
     isQuizLoading,
     onReportVideoIssue
 }) => {
+  const [embedUrl, setEmbedUrl] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(true);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!video) return;
+
+    const validateVideo = async () => {
+      setIsValidating(true);
+      setValidationError(null);
+      
+      try {
+        const validation = await videoValidationService.validateVideo(video);
+        setEmbedUrl(validation.embedUrl);
+        
+        if (!validation.isValid) {
+          setValidationError(validation.error || 'Vídeo indisponível');
+        }
+      } catch (error) {
+        console.error('Error validating video:', error);
+        setValidationError('Erro ao carregar vídeo');
+        setEmbedUrl(null);
+      } finally {
+        setIsValidating(false);
+      }
+    };
+
+    validateVideo();
+  }, [video]);
 
   if (!video) return null;
 
-  const getYouTubeEmbedUrl = (url: string) => {
-    try {
-      // Verifica se é uma URL de playlist direta
-      const playlistDirectMatch = url.match(/youtube\.com\/playlist\?list=([a-zA-Z0-9_-]+)/);
-      if (playlistDirectMatch) {
-        return `https://www.youtube.com/embed/videoseries?list=${playlistDirectMatch[1]}`;
-      }
-      
-      // Primeiro, verifica se é uma URL de playlist
-      const playlistMatch = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
-      
-      // Extrai o ID do vídeo
-      const videoIdMatch = url.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-      
-      // Se o v= contém "videoseries", tenta usar apenas a playlist
-      if (url.includes('v=videoseries') && playlistMatch) {
-        return `https://www.youtube.com/embed/videoseries?list=${playlistMatch[1]}`;
-      }
-      
-      // Se tem um ID de vídeo válido
-      if (videoIdMatch && videoIdMatch[1] !== 'videoseries') {
-        let embedUrl = `https://www.youtube.com/embed/${videoIdMatch[1]}`;
-        // Adiciona a playlist se existir
-        if (playlistMatch) {
-          embedUrl += `?list=${playlistMatch[1]}`;
-        }
-        return embedUrl;
-      }
-      
-      // Se só tem playlist, usa o primeiro vídeo da playlist
-      if (playlistMatch) {
-        return `https://www.youtube.com/embed/videoseries?list=${playlistMatch[1]}`;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error("Error parsing YouTube URL:", error);
-      return null;
-    }
-  };
-  const embedUrl = getYouTubeEmbedUrl(video.videoUrl);
-  
   const shouldDisplayQuiz = !!(video && currentQuizVideo && video.id === currentQuizVideo.id && (currentQuiz || isQuizLoading));
 
   return (
@@ -97,7 +85,11 @@ const VideoModal: React.FC<VideoModalProps> = ({
 
         <h2 id="videoModalTitle" className="text-xl sm:text-2xl font-bold text-brandDarkGray mb-4 pr-8 break-words">{video.title}</h2>
         
-        {embedUrl ? (
+        {isValidating ? (
+          <div className="w-full aspect-video mb-4 rounded-lg overflow-hidden shadow-md bg-gray-100 flex items-center justify-center">
+            <LoadingSpinner size="md" message="Validando vídeo..." />
+          </div>
+        ) : embedUrl ? (
           <div className="w-full mb-4 rounded-lg overflow-hidden shadow-md">
             <iframe
               src={embedUrl}
@@ -111,7 +103,12 @@ const VideoModal: React.FC<VideoModalProps> = ({
         ) : (
           <VideoErrorHandler 
             video={video} 
-            onReportIssue={onReportVideoIssue}
+            onReportIssue={(videoId, issueType) => {
+              // Marca o vídeo como problemático no serviço de validação
+              videoValidationService.markVideoAsProblematic(videoId, issueType);
+              // Chama a função original de report
+              onReportVideoIssue?.(videoId, issueType);
+            }}
           />
         )}
 

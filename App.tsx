@@ -6,6 +6,7 @@ import HomePage from './components/HomePage';
 import LoginPage from './components/LoginPage';
 import StudentDashboard from './components/StudentDashboard';
 import Notification from './components/Notification';
+import VideoAdminPanel from './components/VideoAdminPanel';
 import { Student, VideoRecommendation, QuizDifficulty, QuizQuestion } from './types';
 import { generateQuizForVideo } from './services/geminiService';
 import Footer from './components/Footer';
@@ -16,6 +17,7 @@ export const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('home');
   const [currentUser, setCurrentUser] = useState<Student | null>(null);
   const [showNotification, setShowNotification] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   
   const [dashboardKey, setDashboardKey] = useState(0);
 
@@ -90,6 +92,17 @@ export const App: React.FC = () => {
       setShowNotification(true);
       localStorage.setItem('hasSeenVideoFixNotification', 'true');
     }
+
+    // Adiciona atalho de teclado para abrir painel administrativo (Ctrl+Shift+A)
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && event.key === 'A') {
+        event.preventDefault();
+        setShowAdminPanel(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
 
@@ -125,12 +138,16 @@ export const App: React.FC = () => {
     <div className="flex flex-col min-h-screen">
       {showNotification && (
         <Notification
-          message="✅ Melhorias implementadas: Sistema de vídeos aprimorado com melhor suporte a playlists e detecção de problemas!"
+          message="✅ Melhorias implementadas: Sistema de vídeos aprimorado com validação em tempo real e detecção inteligente de problemas!"
           type="success"
           duration={8000}
           onClose={() => setShowNotification(false)}
         />
       )}
+      <VideoAdminPanel 
+        isOpen={showAdminPanel} 
+        onClose={() => setShowAdminPanel(false)} 
+      />
       <Navbar 
         onNavigate={handleNavigate}
         currentUser={currentUser}
