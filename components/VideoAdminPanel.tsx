@@ -88,7 +88,10 @@ const VideoAdminPanel: React.FC<VideoAdminPanelProps> = ({ isOpen, onClose }) =>
           {/* Cache Statistics */}
           <div className="bg-blue-50 p-4 rounded-lg">
             <h3 className="text-lg font-semibold mb-3">Estatísticas do Cache</h3>
-            <div className="grid grid-cols-3 gap-4 text-center">
+            
+            {/* Video Cache */}
+            <h4 className="text-md font-medium mb-2">Cache de Vídeos</h4>
+            <div className="grid grid-cols-3 gap-4 text-center mb-4">
               <div>
                 <p className="text-2xl font-bold text-blue-600">{cacheStats.total}</p>
                 <p className="text-sm text-gray-600">Total</p>
@@ -102,6 +105,24 @@ const VideoAdminPanel: React.FC<VideoAdminPanelProps> = ({ isOpen, onClose }) =>
                 <p className="text-sm text-gray-600">Expirados</p>
               </div>
             </div>
+
+            {/* Thumbnail Cache */}
+            <h4 className="text-md font-medium mb-2">Cache de Thumbnails</h4>
+            <div className="grid grid-cols-3 gap-4 text-center mb-4">
+              <div>
+                <p className="text-2xl font-bold text-purple-600">{cacheStats.thumbnails?.total || 0}</p>
+                <p className="text-sm text-gray-600">Total</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-green-600">{cacheStats.thumbnails?.valid || 0}</p>
+                <p className="text-sm text-gray-600">Válidos</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-red-600">{cacheStats.thumbnails?.expired || 0}</p>
+                <p className="text-sm text-gray-600">Expirados</p>
+              </div>
+            </div>
+
             <div className="mt-4">
               <button
                 onClick={clearCache}

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { VideoRecommendation } from '../types';
 import { VideoCameraIcon } from './icons';
+import { videoValidationService } from '../services/videoValidationService';
 
 interface VideoCardProps {
   video: VideoRecommendation;
@@ -8,11 +9,23 @@ interface VideoCardProps {
 }
 
 const VideoCard: React.FC<VideoCardProps> = ({ video, onSelectVideo }) => {
+  const [thumbnailUrl, setThumbnailUrl] = useState<string>(video.thumbnailUrl || '');
+
+  useEffect(() => {
+    const validateThumbnail = async () => {
+      if (video.thumbnailUrl) {
+        const validatedUrl = await videoValidationService.validateThumbnail(video.thumbnailUrl);
+        setThumbnailUrl(validatedUrl);
+      }
+    };
+
+    validateThumbnail();
+  }, [video.thumbnailUrl]);
   return (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 flex flex-col h-full">
       <div className="relative">
         <img 
-            src={video.thumbnailUrl || `https://picsum.photos/seed/${video.id}/400/225`} 
+            src={thumbnailUrl || `https://picsum.photos/seed/${video.id}/400/225`} 
             alt={`Thumbnail para ${video.title}`} 
             className="w-full h-48 object-cover" 
             onError={(e) => {

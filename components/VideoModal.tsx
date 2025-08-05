@@ -30,6 +30,7 @@ const VideoModal: React.FC<VideoModalProps> = ({
     onReportVideoIssue
 }) => {
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
+  const [validatedThumbnailUrl, setValidatedThumbnailUrl] = useState<string>('');
   const [isValidating, setIsValidating] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -43,6 +44,7 @@ const VideoModal: React.FC<VideoModalProps> = ({
       try {
         const validation = await videoValidationService.validateVideo(video);
         setEmbedUrl(validation.embedUrl);
+        setValidatedThumbnailUrl(validation.thumbnailUrl || video.thumbnailUrl || '');
         
         if (!validation.isValid) {
           setValidationError(validation.error || 'Vídeo indisponível');
