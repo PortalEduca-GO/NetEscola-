@@ -7,6 +7,7 @@ import VideoCard from './VideoCard';
 import VideoModal from './VideoModal';
 import { generateVideoJustification } from '../services/geminiService';
 import { videoValidationService } from '../services/videoValidationService';
+import { goiasTecChannelService } from '../services/goiasTecChannelService';
 import LoadingSpinner from './LoadingSpinner';
 import { ArrowLeftIcon, LightBulbIcon, AdjustmentsHorizontalIcon } from './icons'; 
 
@@ -52,63 +53,148 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
     setIsLoadingRecommendations(true);
     const focusSubjectsLower = difficultSubjectsList.map(s => s.toLowerCase());
     
-    // 1. Get all videos for the student's grade.
-    let baseVideoPool = ALL_VIDEOS.filter(video => video.gradeLevel.includes(data.schoolGrade));
+    try {
+      let baseVideoPool: VideoRecommendation[] = [];
 
-    // 2. If user is actively filtering, apply that filter to the pool.
-    if (activelyFiltered && selectedFilterSubjects.size > 0) {
-        const filterSubjectsLower = Array.from(selectedFilterSubjects).map((s: string) => s.toLowerCase());
-        baseVideoPool = baseVideoPool.filter(video => filterSubjectsLower.includes(video.subject.toLowerCase()));
-    }
+      // 1. Se o usuário está filtrando por disciplina específica, buscar do canal Goiás Tec
+      if (activelyFiltered && selectedFilterSubjects.size > 0) {
+        console.log('Buscando vídeos específicos do canal Goiás Tec para:', Array.from(selectedFilterSubjects));
+        
+        // Buscar vídeos do canal para cada disciplina selecionada
+        const channelVideosPromises = Array.from(selectedFilterSubjects).map((subject: string) => 
+          goiasTecChannelService.searchVideosBySubject(subject, 15)
+        );
+        
+        const channelVideosBySubject = await Promise.all(channelVideosPromises);
+        const channelVideos = channelVideosBySubject.flat();
+        
+        // Filtrar por série do aluno
+        const gradeFilteredChannelVideos = channelVideos.filter(video => 
+          video.gradeLevel.includes(data.schoolGrade)
+        );
 
-    // 3. Sort the videos.
-    //    - Priority 1: Subjects the student has difficulty with (from difficultSubjectsList).
-    //    - Priority 2: 'GoiásTec' source.
-    //    - Priority 3: Alphabetical by title for consistency.
-    const sortedVideos = [...baseVideoPool].sort((a, b) => {
+        // Combinar com vídeos estáticos se necessário
+        const staticVideos = ALL_VIDEOS.filter(video => 
+          video.gradeLevel.includes(data.schoolGrade) &&
+          Array.from(selectedFilterSubjects).some((subject: string) => 
+            video.subject.toLowerCase() === subject.toLowerCase()
+          )
+        );
+
+        baseVideoPool = [...gradeFilteredChannelVideos, ...staticVideos];
+      } 
+      // 2. Para recomendações de reforço, priorizar disciplinas com dificuldade
+      else {
+        console.log('Buscando vídeos de reforço do canal Goiás Tec para disciplinas:', difficultSubjectsList);
+        
+        if (difficultSubjectsList.length > 0) {
+          // Buscar vídeos do canal para disciplinas com dificuldade
+          const reinfocementVideosPromises = difficultSubjectsList.map(subject => 
+            goiasTecChannelService.searchVideosBySubject(subject, 10)
+          );
+          
+          const reinforcementVideosBySubject = await Promise.all(reinfocementVideosPromises);
+          const reinforcementVideos = reinforcementVideosBySubject.flat();
+          
+          // Filtrar por série
+          const gradeFilteredReinforcementVideos = reinforcementVideos.filter(video => 
+            video.gradeLevel.includes(data.schoolGrade)
+          );
+
+          // Adicionar vídeos estáticos como complemento
+          const staticReinforcementVideos = ALL_VIDEOS.filter(video => 
+            video.gradeLevel.includes(data.schoolGrade) &&
+            difficultSubjectsList.some(subject => 
+              video.subject.toLowerCase() === subject.toLowerCase()
+            )
+          );
+
+          baseVideoPool = [...gradeFilteredReinforcementVideos, ...staticReinforcementVideos];
+        } else {
+          // Se não há dificuldades, buscar vídeos recentes do canal
+          const recentVideos = await goiasTecChannelService.getRecentVideos(20);
+          const gradeFilteredRecentVideos = recentVideos.filter(video => 
+            video.gradeLevel.includes(data.schoolGrade)
+          );
+
+          const staticVideos = ALL_VIDEOS.filter(video => 
+            video.gradeLevel.includes(data.schoolGrade)
+          );
+
+          baseVideoPool = [...gradeFilteredRecentVideos, ...staticVideos];
+        }
+      }
+
+      // 3. Remover duplicatas baseado no videoUrl
+      const uniqueVideos = baseVideoPool.filter((video, index, arr) => 
+        arr.findIndex(v => v.videoUrl === video.videoUrl) === index
+      );
+
+      // 4. Ordenar os vídeos por prioridade
+      const sortedVideos = [...uniqueVideos].sort((a, b) => {
         const aIsFocus = focusSubjectsLower.includes(a.subject.toLowerCase());
         const bIsFocus = focusSubjectsLower.includes(b.subject.toLowerCase());
 
-        if (aIsFocus && !bIsFocus) return -1; // a is priority
-        if (!aIsFocus && bIsFocus) return 1;  // b is priority
+        // Prioridade 1: Disciplinas com dificuldade
+        if (aIsFocus && !bIsFocus) return -1;
+        if (!aIsFocus && bIsFocus) return 1;
 
-        // If both are focus subjects or neither are, prioritize by source
+        // Prioridade 2: Vídeos do canal Goiás Tec
         const aIsGoiasTec = a.source === 'GoiásTec';
         const bIsGoiasTec = b.source === 'GoiásTec';
         
         if (aIsGoiasTec && !bIsGoiasTec) return -1;
         if (!aIsGoiasTec && bIsGoiasTec) return 1;
 
-        return a.title.localeCompare(b.title); // Final deterministic sort
-    });
-    
-    // 4. Validate videos to ensure they're available
-    setIsLoadingRecommendations(true);
-    const validVideos = await videoValidationService.filterValidVideos(sortedVideos);
-    
-    // 5. Generate justifications for the top N videos to provide context.
-    const videosToJustify = validVideos.slice(0, 3); // Reduzido de 9 para 3 para evitar rate limits 
-    
-    // Process sequentially to avoid rate limiting
-    const justifiedVideos = [];
-    for (const video of videosToJustify) {
-      const needsJustification = !video.justification || video.justification.trim() === "" || video.justification.includes("geral");
-      const justification = needsJustification && data.performance.length > 0 
-                            ? await generateVideoJustification(video, data) 
-                            : (video.justification || "Vídeo recomendado para complementar seus estudos.");
-      justifiedVideos.push({ ...video, justification });
+        // Prioridade 3: Ordem alfabética
+        return a.title.localeCompare(b.title);
+      });
+
+      // 5. Validar vídeos para garantir que estão disponíveis
+      const validVideos = await videoValidationService.filterValidVideos(sortedVideos);
+      
+      // 6. Gerar justificativas para os vídeos principais
+      const videosToJustify = validVideos.slice(0, 3);
+      
+      const justifiedVideos = [];
+      for (const video of videosToJustify) {
+        const needsJustification = !video.justification || video.justification.trim() === "" || video.justification.includes("geral");
+        const justification = needsJustification && data.performance.length > 0 
+                              ? await generateVideoJustification(video, data) 
+                              : (video.justification || "Vídeo recomendado para complementar seus estudos.");
+        justifiedVideos.push({ ...video, justification });
+      }
+      
+      const remainingVideos = validVideos.slice(videosToJustify.length);
+      
+      setRecommendedVideos([...justifiedVideos, ...remainingVideos]);
+
+    } catch (error) {
+      console.error('Erro ao buscar vídeos do canal Goiás Tec:', error);
+      
+      // Fallback para vídeos estáticos em caso de erro
+      let fallbackVideos = ALL_VIDEOS.filter(video => video.gradeLevel.includes(data.schoolGrade));
+      
+      if (activelyFiltered && selectedFilterSubjects.size > 0) {
+        const filterSubjectsLower = Array.from(selectedFilterSubjects).map((s: string) => s.toLowerCase());
+        fallbackVideos = fallbackVideos.filter(video => filterSubjectsLower.includes(video.subject.toLowerCase()));
+      }
+      
+      setRecommendedVideos(fallbackVideos);
+    } finally {
+      setIsLoadingRecommendations(false);
     }
-    
-    const remainingVideos = validVideos.slice(videosToJustify.length);
-    
-    setRecommendedVideos([...justifiedVideos, ...remainingVideos]);
-    setIsLoadingRecommendations(false);
   }, [difficultSubjectsList, activelyFiltered, selectedFilterSubjects]);
 
   useEffect(() => {
     if (analysisData && analysisData.performance) {
+      // Usar disciplinas da análise de desempenho + disciplinas disponíveis no Goiás Tec
       const subjectsFromPerformance = analysisData.performance.map(p => p.subject);
-      setAllSubjectsForGrade(subjectsFromPerformance);
+      const availableSubjectsFromChannel = goiasTecChannelService.getAvailableSubjects();
+      
+      // Combinar e remover duplicatas
+      const allSubjects = [...new Set([...subjectsFromPerformance, ...availableSubjectsFromChannel])];
+      setAllSubjectsForGrade(allSubjects);
       
       // Don't pre-select filters. Prioritization is now handled by sorting.
       setSelectedFilterSubjects(new Set());
@@ -174,13 +260,24 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
   const hasInitialDifficulties = difficultSubjectsList.length > 0;
 
   const getTitle = () => {
-    if (activelyFiltered) {
-      return "Resultados da Busca Refinada";
+    if (activelyFiltered && selectedFilterSubjects.size > 0) {
+      return `🎯 Resultados do Canal @goiastec.3serie`;
     }
     if (hasInitialDifficulties) {
-      return "Recomendações de Reforço";
+      return "📚 Recomendações de Reforço - Canal Goiás Tec";
     }
-    return "Explore Vídeos para Estudo";
+    return "🎓 Explore Vídeos Educacionais";
+  };
+
+  const getSubtitle = () => {
+    if (activelyFiltered && selectedFilterSubjects.size > 0) {
+      const subjects = Array.from(selectedFilterSubjects).join(', ');
+      return `Vídeos encontrados para: ${subjects}`;
+    }
+    if (hasInitialDifficulties) {
+      return `Baseado nas suas dificuldades em: ${difficultSubjectsList.join(', ')}`;
+    }
+    return "Conteúdo curado do canal oficial Goiás Tec";
   };
 
   const sidebarBaseClasses = "bg-gray-50 p-4 rounded-lg shadow-lg transition-all duration-300 ease-in-out md:sticky md:top-24 md:self-start";
@@ -212,8 +309,9 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
             className={`${sidebarBaseClasses} ${isSidebarOpen ? `${sidebarWidthClass} block` : 'hidden'} md:block`}
             aria-labelledby="filter-sidebar-heading"
         >
-            <h4 id="filter-sidebar-heading" className="text-lg font-semibold text-brandDarkGray mb-1">Filtrar por Disciplina</h4>
-            <p className="text-xs text-gray-500 mb-3">Selecione para refinar as recomendações.</p>
+            <h4 id="filter-sidebar-heading" className="text-lg font-semibold text-brandDarkGray mb-1">Buscar por Disciplina</h4>
+            <p className="text-xs text-gray-500 mb-2">Encontre aulas específicas do canal <strong>@goiastec.3serie</strong></p>
+            <p className="text-xs text-blue-600 mb-3">💡 Selecione a(s) disciplina(s) que deseja estudar</p>
             <div className="space-y-2 max-h-80 md:max-h-96 overflow-y-auto pr-1 custom-scrollbar">
                 {allSubjectsForGrade.length > 0 ? allSubjectsForGrade.map(subject => (
                     <label key={subject} className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-200 transition-colors cursor-pointer">
@@ -234,9 +332,11 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
                     onClick={handleRefineSearch}
                     className="mt-4 w-full bg-brandGreen hover:bg-brandGreenDark text-white font-semibold py-2 px-4 rounded-md shadow-sm transition duration-150"
                     disabled={isLoadingRecommendations || allSubjectsForGrade.length === 0}
-                    aria-label="Refinar busca de vídeos com as disciplinas selecionadas"
+                    aria-label="Buscar vídeos no canal Goiás Tec para as disciplinas selecionadas"
                 >
-                    {isLoadingRecommendations ? <LoadingSpinner size="sm" /> : "Refinar Busca"}
+                    {isLoadingRecommendations ? <LoadingSpinner size="sm" /> : 
+                      selectedFilterSubjects.size > 0 ? "🔍 Buscar no Canal" : "Ver Recomendações"
+                    }
                 </button>
               </>
             )}
@@ -250,6 +350,7 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
                  <h2 className="text-3xl font-bold text-brandDarkGray mb-2">
                     {getTitle()}
                  </h2>
+                 <p className="text-sm text-gray-600 mb-4">{getSubtitle()}</p>
                 {displayFocusSubjectsPills.length > 0 && (
                   <div className="mb-4 text-sm text-gray-700">
                       <span>Foco em: </span>
