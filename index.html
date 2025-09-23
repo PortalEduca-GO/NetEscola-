@@ -1,0 +1,81 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetEscola+</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet" />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brandGreen: '#28a745',
+              brandGreenDark: '#1e7e34',
+              brandBlue: '#007bff',
+              brandLightGray: '#f8f9fa',
+              brandDarkGray: '#343a40',
+            },
+            animation: {
+              // A classe `animate-typing` usará esta definição combinada.
+              // 1. Animação da largura para o efeito de digitação.
+              // 2. Animação da cor da borda para o efeito de cursor piscando.
+              typing: 'typingKeyframes 3.5s steps(39, end) forwards, cursorKeyframes 0.75s step-end infinite',
+            },
+            keyframes: {
+              typingKeyframes: { // Anima a largura do elemento
+                from: { width: '0%' },
+                to: { width: '100%' }, // Garante que o span ocupe a largura total do texto contido
+              },
+              cursorKeyframes: { // Anima a cor da borda direita para simular o cursor
+                'from, to': { borderRightColor: 'currentColor' }, // 'currentColor' usa a cor do texto
+                '50%': { borderRightColor: 'transparent' },
+              },
+            }
+          }
+        }
+      }
+    </script>
+<style>
+  /* Custom Scrollbar for Webkit browsers */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px; /* Largura da barra de rolagem */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f8f9fa; /* Cor brandLightGray para a trilha */
+    border-radius: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #28a745; /* Cor brandGreen para o polegar */
+    border-radius: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #1e7e34; /* Cor brandGreenDark para o polegar ao passar o mouse */
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai",
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "recharts": "https://esm.sh/recharts@2.12.7?external=react",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "react/": "https://esm.sh/react@18.2.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-brandLightGray text-brandDarkGray">
+    <div id="root"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
+    <script type="module" src="./index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
