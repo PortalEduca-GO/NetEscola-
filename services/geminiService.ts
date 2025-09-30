@@ -74,28 +74,64 @@ async function retryWithBackoff<T>(
 }
 
 // Inicializa a instância da IA de forma preguiçosa (lazy) para evitar crash na inicialização
-function getAiInstance(): GoogleGenAI {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY || process.env.API_KEY;
-  console.log("API Key disponível:", apiKey ? "Sim" : "Não");
-  console.log("Environment:", typeof import.meta !== 'undefined' ? import.meta.env?.MODE : 'node');
-  
-  if (!apiKey) {
-    console.error("Nenhuma API key encontrada. Verificando variáveis:", {
-      VITE_GEMINI_API_KEY: !!import.meta.env?.VITE_GEMINI_API_KEY,
-      VITE_API_KEY: !!import.meta.env?.VITE_API_KEY,
-      process_API_KEY: !!process.env?.API_KEY
-    });
-    throw new Error("A chave da API do Gemini não está configurada. A funcionalidade de IA está desativada.");
+function getAiInstance(): GoogleGenAI | null {
+  try {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY || process.env.API_KEY;
+    console.log("API Key encontrada:", apiKey ? "Sim" : "Não");
+    
+    if (!apiKey) {
+      console.warn("Nenhuma API key do Gemini encontrada - funcionalidade de IA desabilitada");
+      return null;
+    }
+    
+    if (!aiInstance) {
+      aiInstance = new GoogleGenAI({ apiKey });
+      console.log("Instância do GoogleGenAI criada com sucesso");
+    }
+    return aiInstance;
+  } catch (error) {
+    console.error("Erro ao inicializar GoogleGenAI:", error);
+    return null;
+  }
+}
+
+async function tryMultipleModels(prompt: string): Promise<string> {
+  const ai = getAiInstance();
+  if (!ai) {
+    throw new Error("IA não disponível - chave da API não configurada ou inválida");
   }
   
-  if (!aiInstance) {
-    aiInstance = new GoogleGenAI({ apiKey });
-    console.log("Instância do GoogleGenAI criada com sucesso");
+  const modelsToTry = [
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-1.0-pro'
+  ];
+  
+  for (const modelName of modelsToTry) {
+    try {
+      console.log(`Tentando modelo: ${modelName}`);
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: prompt
+      });
+      console.log(`Modelo ${modelName} funcionou!`);
+      return response.text;
+    } catch (error) {
+      console.warn(`Modelo ${modelName} falhou:`, error.message);
+      // Continua para o próximo modelo
+    }
   }
-  return aiInstance;
+  
+  throw new Error("Todos os modelos do Gemini falharam. Funcionalidade de IA indisponível.");
 }
 
 export async function generateQuizForVideo(videoTitle: string, videoSubject: string, difficulty: QuizDifficulty): Promise<QuizQuestion[] | null> {
+  // Verificar se IA está disponível antes de tentar usar
+  const ai = getAiInstance();
+  if (!ai) {
+    console.log('IA não disponível, pulando geração de quiz');
+    return null;
+  }
   let prompt = `Crie um quiz de nível ${difficulty} sobre o tópico "${videoTitle}" da disciplina de ${videoSubject}. 
 O quiz deve ter 3 perguntas de múltipla escolha, cada uma com 4 opções (A, B, C, D) e apenas uma correta.
 Forneça a resposta correta e uma breve explicação para cada pergunta.
@@ -117,13 +153,9 @@ Exemplo de formato para uma pergunta:
 
   try {
     return await retryWithBackoff(async () => {
-      const ai = getAiInstance();
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODEL_TEXT,
-        contents: prompt
-      });
+      const responseText = await tryMultipleModels(prompt);
       
-      let jsonStr = response.text.trim();
+      let jsonStr = responseText.trim();
       const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
       const match = jsonStr.match(fenceRegex);
       if (match && match[2]) {
@@ -144,6 +176,12 @@ Exemplo de formato para uma pergunta:
 }
 
 export async function generateVideoJustification(video: VideoRecommendation, analysisData: AnalysisData): Promise<string> {
+  // Verificar se IA está disponível antes de tentar usar
+  const ai = getAiInstance();
+  if (!ai) {
+    console.log('IA não disponível, usando justificação padrão');
+    return video.justification || "Vídeo recomendado para complementar seus estudos.";
+  }
   const difficultSubjects = analysisData.performance
     .filter(p => p.grade < DEFAULT_SUBJECT_PERFORMANCE_THRESHOLD) 
     .map(p => p.subject)
@@ -159,12 +197,7 @@ export async function generateVideoJustification(video: VideoRecommendation, ana
 
   try {
     return await retryWithBackoff(async () => {
-      const ai = getAiInstance();
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODEL_TEXT,
-        contents: prompt
-      });
-      return response.text;
+      return await tryMultipleModels(prompt);
     }, 1, 1000); // Apenas 1 retry para justificativas, com delay maior
   } catch (error) {
     console.error("Error generating video justification after retries:", error);
@@ -178,27 +211,16 @@ export async function generateVideoJustification(video: VideoRecommendation, ana
   }
 }
 
-
-export async function getInformationWithSearch(query: string): Promise<{ text: string; sources: GroundingChunk[] }> {
-  try {
-    const ai = getAiInstance();
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL_TEXT, 
-      contents: query
-    });
-    const text = response.text;
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    return { text, sources };
-  } catch (error) {
-    console.error("Error fetching information with search grounding:", error);
-    const errorMessage = error instanceof Error ? error.message : "Não foi possível buscar informações no momento.";
-    return { text: errorMessage, sources: [] };
-  }
-}
-
 export async function generatePerformanceSummary(student: Student, analysisData: AnalysisData): Promise<string> {
   const { performance, bimester } = analysisData;
   const studentFirstName = student.nome.split(' ')[0];
+
+  // Verificar se IA está disponível antes de tentar usar
+  const ai = getAiInstance();
+  if (!ai) {
+    console.log('IA não disponível, usando fallback inteligente');
+    return generateFallbackSummary(student, analysisData);
+  }
 
   const gradesText = performance.map(p => `${p.subject}: ${(p.grade / 10).toFixed(1)}/10`).join('\n');
 
@@ -218,27 +240,50 @@ export async function generatePerformanceSummary(student: Student, analysisData:
 
   try {
     return await retryWithBackoff(async () => {
-      const ai = getAiInstance();
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODEL_TEXT,
-        contents: prompt
-      });
-      return response.text;
+      return await tryMultipleModels(prompt);
     });
   } catch (error) {
     console.error("Error generating performance summary after retries:", error);
     // Fallback mais inteligente baseado nos dados
-    const bestSubjects = performance
-      .sort((a, b) => b.grade - a.grade)
-      .slice(0, 3)
-      .map(p => p.subject);
-    
-    const worstSubjects = performance
-      .filter(p => p.grade < 60)
-      .sort((a, b) => a.grade - b.grade)
-      .slice(0, 2)
-      .map(p => p.subject);
+    return generateFallbackSummary(student, analysisData);
+  }
+}
 
-    return `Parabéns, ${studentFirstName}! Você está se destacando em ${bestSubjects.join(', ')}, mostrando sua dedicação e interesse por essas áreas. ${worstSubjects.length > 0 ? `Para alcançar ainda melhores resultados, que tal dedicar um pouco mais de atenção às disciplinas de ${worstSubjects.join(' e ')}? Com um pouquinho mais de foco nessas matérias, tenho certeza que você vai conseguir excelentes resultados!` : 'Continue assim, você está no caminho certo!'} Acredite no seu potencial! 🌟`;
+// Função auxiliar para gerar resumo de fallback
+function generateFallbackSummary(student: Student, analysisData: AnalysisData): string {
+  const { performance } = analysisData;
+  const studentFirstName = student.nome.split(' ')[0];
+
+  const bestSubjects = performance
+    .sort((a, b) => b.grade - a.grade)
+    .slice(0, 3)
+    .map(p => p.subject);
+  
+  const worstSubjects = performance
+    .filter(p => p.grade < 60)
+    .sort((a, b) => a.grade - b.grade)
+    .slice(0, 2)
+    .map(p => p.subject);
+
+  return `Parabéns, ${studentFirstName}! Você está se destacando em ${bestSubjects.join(', ')}, mostrando sua dedicação e interesse por essas áreas. ${worstSubjects.length > 0 ? `Para alcançar ainda melhores resultados, que tal dedicar um pouco mais de atenção às disciplinas de ${worstSubjects.join(' e ')}? Com um pouquinho mais de foco nessas matérias, tenho certeza que você vai conseguir excelentes resultados!` : 'Continue assim, você está no caminho certo!'} Acredite no seu potencial! 🌟`;
+}
+
+
+export async function getInformationWithSearch(query: string): Promise<{ text: string; sources: GroundingChunk[] }> {
+  // Verificar se IA está disponível antes de tentar usar
+  const ai = getAiInstance();
+  if (!ai) {
+    console.log('IA não disponível, retornando mensagem padrão');
+    return { text: "Informações não disponíveis no momento.", sources: [] };
+  }
+
+  try {
+    const responseText = await tryMultipleModels(query);
+    // Para esta função, não temos sources pois estamos usando tryMultipleModels
+    return { text: responseText, sources: [] };
+  } catch (error) {
+    console.error("Error fetching information with search grounding:", error);
+    const errorMessage = error instanceof Error ? error.message : "Não foi possível buscar informações no momento.";
+    return { text: errorMessage, sources: [] };
   }
 }

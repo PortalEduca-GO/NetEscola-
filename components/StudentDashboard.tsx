@@ -69,8 +69,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = (props) => {
 
       if (performanceData.length > 0) {
         setIsSummaryLoading(true);
-        const generatedSummary = await generatePerformanceSummary(student, data);
-        setSummary(generatedSummary);
+        try {
+          const generatedSummary = await generatePerformanceSummary(student, data);
+          setSummary(generatedSummary);
+        } catch (error) {
+          console.error('Erro ao gerar resumo de desempenho:', error);
+          // Fallback para resumo básico
+          const fallbackSummary = `Olá ${student.nome.split(' ')[0]}! Seus resultados foram analisados. Continue se dedicando aos estudos e utilizando os recursos disponíveis na plataforma para melhorar ainda mais seu desempenho!`;
+          setSummary(fallbackSummary);
+        }
         setIsSummaryLoading(false);
       }
     }, 1000);

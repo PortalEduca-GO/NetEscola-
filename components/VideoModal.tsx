@@ -105,6 +105,7 @@ const VideoModal: React.FC<VideoModalProps> = ({
         ) : (
           <VideoErrorHandler 
             video={video} 
+            errorMessage={validationError}
             onReportIssue={(videoId, issueType) => {
               // Marca o vídeo como problemático no serviço de validação
               videoValidationService.markVideoAsProblematic(videoId, issueType);

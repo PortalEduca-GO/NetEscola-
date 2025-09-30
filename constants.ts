@@ -24,6 +24,15 @@ export const SUBJECTS_BY_GRADE: Record<SchoolGrade, string[]> = {
   [SchoolGrade.SERIE_3_EM]: ["Português", "Matemática", "Física", "Química", "Biologia", "História", "Geografia", "Filosofia", "Sociologia", "Inglês"],
 };
 
+// Mapeamento para normalizar nomes de disciplinas dos dados oficiais para nomes de vídeos
+export const SUBJECT_NAME_MAPPING: Record<string, string> = {
+  "LÍNGUA PORTUGUESA": "Português",
+  "LÍNGUA INGLESA": "Inglês",
+  "EDUCAÇÃO FÍSICA": "Educação Física",
+  "CURSOS FIC": "Cursos FIC",
+  // Adicionar outros mapeamentos conforme necessário
+};
+
 const ALLOWED_GRADES_SET = new Set(SCHOOL_GRADES_OPTIONS);
 
 const filterVideosByAllowedGrades = (videos: VideoRecommendation[]): VideoRecommendation[] => {
@@ -184,6 +193,37 @@ const RAW_VIDEOS: VideoRecommendation[] = [
       gradeLevel: [SchoolGrade.SERIE_3_EM],
       source: 'GoiásTec',
   },
+  // --- 3ª Série EM - Língua Portuguesa (GoiásTec) ---
+  {
+      id: "gt3_port_1",
+      title: "LÍNGUA PORTUGUESA - INTERPRETAÇÃO DE TEXTO - AULA 01 (3ª Série)",
+      description: "Aprenda técnicas de interpretação de texto e análise crítica. Conteúdo do GoiásTec para a 3ª Série do Ensino Médio.",
+      thumbnailUrl: "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMzUuNSA2NUwxNTUuNSA4NUwxMzUuNSAxMDVWNjVaIiBmaWxsPSIjOTVBM0I3Ii8+Cjx0ZXh0IHg9IjE2MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5NUEzQjciPkltYWdlbSBJbmRpc3BvbsOtdmVsPC90ZXh0Pgo8L3N2Zz4=",
+      videoUrl: "https://www.youtube.com/@goiastec.3serie", // Canal principal da 3ª série
+      subject: "Português",
+      gradeLevel: [SchoolGrade.SERIE_3_EM],
+      source: 'GoiásTec',
+  },
+  {
+      id: "gt3_port_2",
+      title: "LÍNGUA PORTUGUESA - GRAMÁTICA: VERBOS - AULA 02 (3ª Série)",
+      description: "Estude conjugação verbal, tempos e modos verbais. Conteúdo do GoiásTec para a 3ª Série do Ensino Médio.",
+      thumbnailUrl: "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMzUuNSA2NUwxNTUuNSA4NUwxMzUuNSAxMDVWNjVaIiBmaWxsPSIjOTVBM0I3Ii8+Cjx0ZXh0IHg9IjE2MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5NUEzQjciPkltYWdlbSBJbmRpc3BvbsOtdmVsPC90ZXh0Pgo8L3N2Zz4=",
+      videoUrl: "https://www.youtube.com/@goiastec.3serie",
+      subject: "Português",
+      gradeLevel: [SchoolGrade.SERIE_3_EM],
+      source: 'GoiásTec',
+  },
+  {
+      id: "gt3_port_3",
+      title: "LÍNGUA PORTUGUESA - LITERATURA: MODERNISMO - AULA 03 (3ª Série)",
+      description: "Conheça o movimento modernista brasileiro e suas principais características. Conteúdo do GoiásTec para a 3ª Série do Ensino Médio.",
+      thumbnailUrl: "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMzUuNSA2NUwxNTUuNSA4NUwxMzUuNSAxMDVWNjVaIiBmaWxsPSIjOTVBM0I3Ii8+Cjx0ZXh0IHg9IjE2MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5NUEzQjciPkltYWdlbSBJbmRpc3BvbsOtdmVsPC90ZXh0Pgo8L3N2Zz4=",
+      videoUrl: "https://www.youtube.com/@goiastec.3serie",
+      subject: "Português",
+      gradeLevel: [SchoolGrade.SERIE_3_EM],
+      source: 'GoiásTec',
+  },
    {
       id: "yt_99tWmYj2Dn0",
       title: "Conflitos no Campo e Questão Agrária (Vestibular)",
@@ -260,4 +300,4 @@ export const ALL_VIDEOS: VideoRecommendation[] = filterVideosByAllowedGrades(RAW
 
 export const DEFAULT_SUBJECT_PERFORMANCE_THRESHOLD = 60; 
 
-export const GEMINI_MODEL_TEXT = 'gemini-1.5-flash';
+export const GEMINI_MODEL_TEXT = 'gemini-1.5-flash'; // Modelo principal atualizado

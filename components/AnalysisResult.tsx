@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AnalysisData, VideoRecommendation, SchoolGrade, QuizDifficulty, QuizQuestion } from '../types'; 
-import { DEFAULT_SUBJECT_PERFORMANCE_THRESHOLD, ALL_VIDEOS } from '../constants'; 
+import { DEFAULT_SUBJECT_PERFORMANCE_THRESHOLD, ALL_VIDEOS, SUBJECT_NAME_MAPPING } from '../constants'; 
 import VideoCard from './VideoCard';
 import VideoModal from './VideoModal';
 import { generateVideoJustification } from '../services/geminiService';
@@ -52,136 +52,100 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
   const filterAndPrepareVideos = useCallback(async (data: AnalysisData) => {
     setIsLoadingRecommendations(true);
     const focusSubjectsLower = difficultSubjectsList.map(s => s.toLowerCase());
-    
+    let apiVideosCount = 0;
+    let staticVideosCount = 0;
+    let usedFallback = false;
     try {
       let baseVideoPool: VideoRecommendation[] = [];
-
-      // 1. Se o usuário está filtrando por disciplina específica, buscar do canal Goiás Tec
       if (activelyFiltered && selectedFilterSubjects.size > 0) {
-        console.log('Buscando vídeos específicos do canal Goiás Tec para:', Array.from(selectedFilterSubjects));
-        
-        // Buscar vídeos do canal para cada disciplina selecionada
         const channelVideosPromises = Array.from(selectedFilterSubjects).map((subject: string) => 
-          goiasTecChannelService.searchVideosBySubject(subject, 15)
+          goiasTecChannelService.searchVideosBySubject(subject, 15, data.schoolGrade)
         );
-        
         const channelVideosBySubject = await Promise.all(channelVideosPromises);
         const channelVideos = channelVideosBySubject.flat();
-        
-        // Filtrar por série do aluno
-        const gradeFilteredChannelVideos = channelVideos.filter(video => 
-          video.gradeLevel.includes(data.schoolGrade)
-        );
-
-        // Combinar com vídeos estáticos se necessário
-        const staticVideos = ALL_VIDEOS.filter(video => 
-          video.gradeLevel.includes(data.schoolGrade) &&
-          Array.from(selectedFilterSubjects).some((subject: string) => 
-            video.subject.toLowerCase() === subject.toLowerCase()
-          )
-        );
-
-        baseVideoPool = [...gradeFilteredChannelVideos, ...staticVideos];
-      } 
-      // 2. Para recomendações de reforço, priorizar disciplinas com dificuldade
-      else {
-        console.log('Buscando vídeos de reforço do canal Goiás Tec para disciplinas:', difficultSubjectsList);
-        
+        apiVideosCount = channelVideos.length;
+        // Ao buscar manualmente, mostrar apenas vídeos do canal (YouTube), nunca estáticos
+        baseVideoPool = [...channelVideos];
+      } else {
         if (difficultSubjectsList.length > 0) {
-          // Buscar vídeos do canal para disciplinas com dificuldade
           const reinfocementVideosPromises = difficultSubjectsList.map(subject => 
-            goiasTecChannelService.searchVideosBySubject(subject, 10)
+            goiasTecChannelService.searchVideosBySubject(subject, 10, data.schoolGrade)
           );
-          
           const reinforcementVideosBySubject = await Promise.all(reinfocementVideosPromises);
+          apiVideosCount = reinforcementVideosBySubject.reduce((acc, arr) => acc + arr.length, 0);
           const reinforcementVideos = reinforcementVideosBySubject.flat();
-          
-          // Filtrar por série
           const gradeFilteredReinforcementVideos = reinforcementVideos.filter(video => 
             video.gradeLevel.includes(data.schoolGrade)
           );
-
-          // Adicionar vídeos estáticos como complemento
-          const staticReinforcementVideos = ALL_VIDEOS.filter(video => 
-            video.gradeLevel.includes(data.schoolGrade) &&
-            difficultSubjectsList.some(subject => 
-              video.subject.toLowerCase() === subject.toLowerCase()
-            )
-          );
-
-          baseVideoPool = [...gradeFilteredReinforcementVideos, ...staticReinforcementVideos];
+          baseVideoPool = [...gradeFilteredReinforcementVideos];
         } else {
-          // Se não há dificuldades, buscar vídeos recentes do canal
-          const recentVideos = await goiasTecChannelService.getRecentVideos(20);
-          const gradeFilteredRecentVideos = recentVideos.filter(video => 
-            video.gradeLevel.includes(data.schoolGrade)
-          );
-
-          const staticVideos = ALL_VIDEOS.filter(video => 
-            video.gradeLevel.includes(data.schoolGrade)
-          );
-
-          baseVideoPool = [...gradeFilteredRecentVideos, ...staticVideos];
+          // Se não há dificuldades e não há filtro manual, NÃO mostrar vídeos automáticos
+          baseVideoPool = [];
         }
       }
-
-      // 3. Remover duplicatas baseado no videoUrl
+      // Remover duplicatas baseado no videoUrl
       const uniqueVideos = baseVideoPool.filter((video, index, arr) => 
         arr.findIndex(v => v.videoUrl === video.videoUrl) === index
       );
-
-      // 4. Ordenar os vídeos por prioridade
+      // Ordenar os vídeos por prioridade
       const sortedVideos = [...uniqueVideos].sort((a, b) => {
         const aIsFocus = focusSubjectsLower.includes(a.subject.toLowerCase());
         const bIsFocus = focusSubjectsLower.includes(b.subject.toLowerCase());
-
-        // Prioridade 1: Disciplinas com dificuldade
         if (aIsFocus && !bIsFocus) return -1;
         if (!aIsFocus && bIsFocus) return 1;
-
-        // Prioridade 2: Vídeos do canal Goiás Tec
         const aIsGoiasTec = a.source === 'GoiásTec';
         const bIsGoiasTec = b.source === 'GoiásTec';
-        
         if (aIsGoiasTec && !bIsGoiasTec) return -1;
         if (!aIsGoiasTec && bIsGoiasTec) return 1;
-
-        // Prioridade 3: Ordem alfabética
         return a.title.localeCompare(b.title);
       });
-
-      // 5. Validar vídeos para garantir que estão disponíveis
+      // Validar vídeos para garantir que estão disponíveis
       const validVideos = await videoValidationService.filterValidVideos(sortedVideos);
-      
-      // 6. Gerar justificativas para os vídeos principais
+      // Gerar justificativas para os vídeos principais
       const videosToJustify = validVideos.slice(0, 3);
-      
       const justifiedVideos = [];
       for (const video of videosToJustify) {
-        const needsJustification = !video.justification || video.justification.trim() === "" || video.justification.includes("geral");
-        const justification = needsJustification && data.performance.length > 0 
-                              ? await generateVideoJustification(video, data) 
-                              : (video.justification || "Vídeo recomendado para complementar seus estudos.");
-        justifiedVideos.push({ ...video, justification });
+        try {
+          const needsJustification = !video.justification || video.justification.trim() === "" || video.justification.includes("geral");
+          const justification = needsJustification && data.performance.length > 0 
+                                ? await generateVideoJustification(video, data) 
+                                : (video.justification || "Vídeo recomendado para complementar seus estudos.");
+          justifiedVideos.push({ ...video, justification });
+        } catch (justificationError) {
+          justifiedVideos.push({ 
+            ...video, 
+            justification: video.justification || "Vídeo recomendado para complementar seus estudos." 
+          });
+        }
       }
-      
       const remainingVideos = validVideos.slice(videosToJustify.length);
-      
       setRecommendedVideos([...justifiedVideos, ...remainingVideos]);
-
     } catch (error) {
-      console.error('Erro ao buscar vídeos do canal Goiás Tec:', error);
-      
-      // Fallback para vídeos estáticos em caso de erro
+      usedFallback = true;
       let fallbackVideos = ALL_VIDEOS.filter(video => video.gradeLevel.includes(data.schoolGrade));
-      
       if (activelyFiltered && selectedFilterSubjects.size > 0) {
         const filterSubjectsLower = Array.from(selectedFilterSubjects).map((s: string) => s.toLowerCase());
         fallbackVideos = fallbackVideos.filter(video => filterSubjectsLower.includes(video.subject.toLowerCase()));
+      } else if (difficultSubjectsList.length > 0) {
+        const difficultSubjectsLower = difficultSubjectsList.map(s => s.toLowerCase());
+        const goiasTecDifficultVideos = fallbackVideos.filter(video => 
+          difficultSubjectsLower.includes(video.subject.toLowerCase()) && video.source === 'GoiásTec'
+        );
+        const otherSourcesDifficultVideos = fallbackVideos.filter(video => 
+          difficultSubjectsLower.includes(video.subject.toLowerCase()) && video.source !== 'GoiásTec'
+        );
+        const difficultVideos = [...goiasTecDifficultVideos, ...otherSourcesDifficultVideos];
+        if (difficultVideos.length > 0) {
+          fallbackVideos = difficultVideos;
+        } else {
+          fallbackVideos = ALL_VIDEOS.filter(video => video.gradeLevel.includes(data.schoolGrade));
+        }
       }
-      
       setRecommendedVideos(fallbackVideos);
     } finally {
+      (window as any).lastApiVideosCount = apiVideosCount;
+      (window as any).lastStaticVideosCount = staticVideosCount;
+      (window as any).lastUsedFallback = usedFallback;
       setIsLoadingRecommendations(false);
     }
   }, [difficultSubjectsList, activelyFiltered, selectedFilterSubjects]);
@@ -351,6 +315,18 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
                     {getTitle()}
                  </h2>
                  <p className="text-sm text-gray-600 mb-4">{getSubtitle()}</p>
+                {/* DEBUG VISUAL: Mostra origem dos vídeos */}
+                <div className="mb-2 text-xs text-gray-500">
+                  <span>Vídeos da API do YouTube: <b>{(window as any).lastApiVideosCount ?? 0}</b> | </span>
+                  <span>Vídeos estáticos: <b>{(window as any).lastStaticVideosCount ?? 0}</b> | </span>
+                  <span>Fallback ativado: <b>{(window as any).lastUsedFallback ? 'Sim' : 'Não'}</b></span>
+                </div>
+                {/* AVISO SE NÃO HÁ VÍDEOS DA API */}
+                {((window as any).lastApiVideosCount === 0 && (window as any).lastUsedFallback) && (
+                  <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded">
+                    <b>Atenção:</b> Não foi possível buscar vídeos do YouTube. Verifique se a chave da API está configurada corretamente em <code>.env</code> (<b>VITE_YOUTUBE_API_KEY</b>), se a quota da API não foi excedida, e se o canal possui vídeos públicos.
+                  </div>
+                )}
                 {displayFocusSubjectsPills.length > 0 && (
                   <div className="mb-4 text-sm text-gray-700">
                       <span>Foco em: </span>
@@ -370,13 +346,32 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
             )}
             
             {!isLoadingRecommendations && recommendedVideos.length === 0 && (
-              <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded text-yellow-700 mt-6">
-                  <h4 className="font-semibold flex items-center"><LightBulbIcon className="h-5 w-5 mr-2" />Nenhuma Recomendação Encontrada</h4>
-                  <p className="text-sm">
-                      Não encontramos vídeos para os critérios selecionados ({activelyFiltered ? "filtros ativos" : "dificuldades identificadas"}). 
-                      Tente ajustar os filtros para encontrar outros conteúdos.
-                  </p>
-              </div>
+              <>
+                {/* Parabéns se todas as notas >= 6 e não há filtro manual */}
+                {difficultSubjectsList.length === 0 && !activelyFiltered && (
+                  <div className="p-4 bg-green-50 border-l-4 border-green-400 rounded text-green-700 mt-6">
+                    <h4 className="font-semibold flex items-center"><LightBulbIcon className="h-5 w-5 mr-2" />Parabéns!</h4>
+                    <p className="text-sm">
+                      Você está mandando muito bem! Todas as suas notas estão acima de 6. Continue assim!<br/>
+                      Se quiser, você pode escolher uma disciplina ao lado para explorar videoaulas do canal GoiásTec.
+                    </p>
+                  </div>
+                )}
+                {/* Mensagens padrão para outros casos */}
+                {!(difficultSubjectsList.length === 0 && !activelyFiltered) && (
+                  <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded text-yellow-700 mt-6">
+                    <h4 className="font-semibold flex items-center"><LightBulbIcon className="h-5 w-5 mr-2" />Nenhuma Recomendação Encontrada</h4>
+                    <p className="text-sm">
+                      {difficultSubjectsList.length > 0 && !activelyFiltered ? 
+                        `Não encontramos vídeos específicos para as disciplinas com dificuldade (${difficultSubjectsList.join(', ')}). Isso pode indicar que ainda não temos conteúdo disponível para essas matérias nesta série.` :
+                        activelyFiltered ? 
+                        "Não encontramos vídeos para os filtros selecionados. Tente remover alguns filtros para ver mais opções." :
+                        "Não encontramos vídeos para os critérios selecionados. Tente ajustar os filtros para encontrar outros conteúdos."
+                      }
+                    </p>
+                  </div>
+                )}
+              </>
             )}
         </main>
       </div>

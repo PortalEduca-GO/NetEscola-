@@ -18,6 +18,7 @@ class VideoValidationService {
   private thumbnailCache = new Map<string, { isValid: boolean; timestamp: number }>();
   private readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutos
   private readonly THUMBNAIL_CACHE_DURATION = 60 * 60 * 1000; // 1 hora
+  private readonly API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || '';
 
   getYouTubeEmbedUrl(url: string): string | null {
     try {
@@ -133,7 +134,7 @@ class VideoValidationService {
         isValid: isAvailable,
         embedUrl: isAvailable ? embedUrl : null,
         thumbnailUrl: validatedThumbnailUrl,
-        error: isAvailable ? undefined : 'Vídeo indisponível'
+        error: isAvailable ? undefined : this.getVideoErrorMessage(embedUrl)
       };
 
       this.cacheResult(cacheKey, result);
@@ -153,31 +154,106 @@ class VideoValidationService {
 
   private async checkVideoAvailability(embedUrl: string): Promise<boolean> {
     try {
-      // Simula uma checagem mais robusta
-      // Em produção, você poderia usar a YouTube Data API v3
-      
-      // Por enquanto, vamos assumir que certas condições tornam um vídeo indisponível
       const videoId = this.extractVideoIdFromEmbed(embedUrl);
       
+      if (!videoId) {
+        // Se é uma playlist, assume que está disponível
+        if (embedUrl.includes('videoseries')) {
+          return true;
+        }
+        return false;
+      }
+
       // Lista de IDs conhecidamente problemáticos (baseado em reports)
       const problematicVideos = this.getProblematicVideoIds();
       
-      if (videoId && problematicVideos.includes(videoId)) {
+      if (problematicVideos.includes(videoId)) {
         return false;
       }
-      
-      // Se é uma playlist, assume que está disponível
-      if (embedUrl.includes('videoseries')) {
-        return true;
+
+      // Se temos API key, faz verificação real via YouTube API
+      if (this.API_KEY) {
+        return await this.checkVideoWithYouTubeAPI(videoId);
       }
-      
-      // Simulação: 95% dos vídeos são considerados disponíveis
+
+      // Fallback: simulação (para desenvolvimento sem API key)
       return Math.random() > 0.05;
       
     } catch (error) {
       console.error('Error checking video availability:', error);
       return false;
     }
+  }
+
+  private async checkVideoWithYouTubeAPI(videoId: string): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${this.API_KEY}&part=status,contentDetails`
+      );
+
+      if (!response.ok) {
+        console.warn(`YouTube API request failed for video ${videoId}: ${response.status}`);
+        return false;
+      }
+
+      const data = await response.json();
+
+      if (!data.items || data.items.length === 0) {
+        return false; // Vídeo não encontrado
+      }
+
+      const video = data.items[0];
+      const status = video.status;
+
+      // Verifica se o vídeo está disponível
+      if (status.privacyStatus === 'private') {
+        return false; // Vídeo privado
+      }
+
+      if (status.uploadStatus !== 'processed') {
+        return false; // Vídeo não processado
+      }
+
+      // Verifica se há restrições regionais
+      const contentDetails = video.contentDetails;
+      if (contentDetails && contentDetails.regionRestriction) {
+        const blockedRegions = contentDetails.regionRestriction.blocked || [];
+        // Você pode adicionar lógica para verificar região do usuário
+        // Por simplicidade, assume disponível se não há bloqueio explícito
+        if (blockedRegions.length > 0) {
+          // Para este projeto, assumimos que vídeos bloqueados em algumas regiões ainda podem estar disponíveis
+          // Em produção, você verificaria a região do usuário
+        }
+      }
+
+      return true;
+
+    } catch (error) {
+      console.error('Error checking video with YouTube API:', error);
+      return false;
+    }
+  }
+
+  private getVideoErrorMessage(embedUrl: string): string {
+    const videoId = this.extractVideoIdFromEmbed(embedUrl);
+    
+    if (!videoId) {
+      return 'URL do vídeo inválida';
+    }
+
+    // Verifica se é um vídeo reportado como problemático
+    const problematicVideos = this.getProblematicVideoIds();
+    if (problematicVideos.includes(videoId)) {
+      return 'Vídeo reportado como indisponível pelos usuários';
+    }
+
+    // Se temos API key, tenta dar mensagem mais específica
+    if (this.API_KEY) {
+      // Por enquanto, mensagem genérica. Em produção, poderia armazenar o status da API
+      return 'Vídeo não está disponível no YouTube';
+    }
+
+    return 'Vídeo temporariamente indisponível';
   }
 
   private extractVideoIdFromEmbed(embedUrl: string): string | null {

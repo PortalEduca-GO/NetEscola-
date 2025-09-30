@@ -4,13 +4,15 @@ import { VideoRecommendation } from '../types';
 interface VideoErrorHandlerProps {
   video: VideoRecommendation;
   onReportIssue?: (videoId: string, issueType: string) => void;
+  errorMessage?: string;
 }
 
 type IssueType = 'unavailable' | 'private' | 'deleted' | 'network' | 'other';
 
 const VideoErrorHandler: React.FC<VideoErrorHandlerProps> = ({ 
   video, 
-  onReportIssue 
+  onReportIssue,
+  errorMessage 
 }) => {
   const [hasReported, setHasReported] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -50,8 +52,7 @@ const VideoErrorHandler: React.FC<VideoErrorHandlerProps> = ({
         
         <h3 className="text-xl font-semibold text-gray-700 mb-2">Vídeo Indisponível</h3>
         <p className="text-gray-600 text-sm mb-4 leading-relaxed">
-          Este vídeo não pode ser reproduzido no momento. Isso pode acontecer se o vídeo foi removido, 
-          está privado ou há problemas temporários.
+          {errorMessage || 'Este vídeo não pode ser reproduzido no momento. Isso pode acontecer se o vídeo foi removido, está privado ou há problemas temporários.'}
         </p>
 
         <div className="space-y-3">
