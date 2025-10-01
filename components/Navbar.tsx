@@ -9,9 +9,10 @@ interface NavbarProps {
   onNavigate: (view: View) => void;
   currentUser: Student | null;
   onLogout: () => void;
+  onOpenProfile?: () => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentUser, onLogout }) => {
+const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentUser, onLogout, onOpenProfile }) => {
   const getFirstName = (name: string) => name.split(' ')[0];
 
   return (
@@ -38,6 +39,15 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentUser, onLogout }) =>
                 >
                   Meu Painel
                 </button>
+                {onOpenProfile && (
+                  <button
+                    onClick={onOpenProfile}
+                    className="text-gray-700 hover:bg-gray-200 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium mr-4 flex items-center gap-2"
+                    aria-label="Abrir informações do perfil"
+                  >
+                    <UserCircleIcon className="h-4 w-4" /> Meu Perfil
+                  </button>
+                )}
                  <button
                   onClick={onLogout}
                   className="bg-brandGreen hover:bg-brandGreenDark text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center"

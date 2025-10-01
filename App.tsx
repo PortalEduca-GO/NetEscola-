@@ -20,6 +20,7 @@ export const App: React.FC = () => {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   
   const [dashboardKey, setDashboardKey] = useState(0);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const [currentQuizVideo, setCurrentQuizVideo] = useState<VideoRecommendation | null>(null);
   const [currentQuiz, setCurrentQuiz] = useState<QuizQuestion[] | null>(null);
@@ -31,6 +32,9 @@ export const App: React.FC = () => {
       setDashboardKey(prevKey => prevKey + 1);
     }
     setCurrentView(view);
+    if (view !== 'dashboard') {
+      setIsProfileOpen(false);
+    }
     window.scrollTo(0, 0); 
   };
   
@@ -43,6 +47,7 @@ export const App: React.FC = () => {
     setCurrentUser(null);
     setCurrentQuiz(null);
     setCurrentQuizVideo(null);
+    setIsProfileOpen(false);
     handleNavigate('home');
   };
 
@@ -127,6 +132,8 @@ export const App: React.FC = () => {
             currentQuizDifficulty={currentQuizDifficulty}
             isQuizLoading={isQuizLoading}
             onReportVideoIssue={handleReportVideoIssue}
+            isProfileOpen={isProfileOpen}
+            onCloseProfile={() => setIsProfileOpen(false)}
           />
         );
       default:
@@ -152,6 +159,7 @@ export const App: React.FC = () => {
         onNavigate={handleNavigate}
         currentUser={currentUser}
         onLogout={handleLogout}
+        onOpenProfile={currentUser ? () => setIsProfileOpen(true) : undefined}
       />
       <main className="flex-grow">
         {renderView()}

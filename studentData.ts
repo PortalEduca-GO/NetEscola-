@@ -1,4 +1,4 @@
-import { Student, StudentGradeRecord, CurriculumPlan, SchoolGrade } from './types.ts';
+import { Student, StudentGradeRecord, CurriculumPlan, SchoolGrade, StudentVideoHistoryItem, StudentActivityRecord, QuizDifficulty } from './types.ts';
 
 export const students: Student[] = [
     {
@@ -2010,6 +2010,41 @@ export const grades: StudentGradeRecord[] = [
 
 
 ];
+
+export const studentVideoHistory: Record<string, StudentVideoHistoryItem[]> = {
+    '12001100367': [
+        { videoId: 'gt3_hist_1', watchedAt: '2025-05-28T18:30:00Z', progress: 1 },
+        { videoId: 'yt_yfl5OSnLpSc', watchedAt: '2025-05-26T20:15:00Z', progress: 0.92 },
+        { videoId: 'yt_2cBoGIraLgE', watchedAt: '2025-05-24T17:05:00Z', progress: 0.88 },
+    ],
+    '12001160937': [
+        { videoId: 'gt3_bio_genetica_conceitos', watchedAt: '2025-05-30T14:45:00Z', progress: 1 },
+        { videoId: 'yt_nnn0WieX35o', watchedAt: '2025-05-27T19:22:00Z', progress: 0.95 },
+        { videoId: 'gt3_qui_termoquimica', watchedAt: '2025-05-22T16:10:00Z', progress: 0.84 },
+    ],
+    '13101980120': [
+        { videoId: 'gt3_port_1', watchedAt: '2025-05-25T10:30:00Z', progress: 0.75 },
+        { videoId: 'yt_Yln0xSwRVtQ', watchedAt: '2025-05-23T18:40:00Z', progress: 0.98 },
+        { videoId: 'yt_RPFwM1aLycw', watchedAt: '2025-05-20T21:00:00Z', progress: 1 },
+    ],
+};
+
+export const studentActivityHistory: Record<string, StudentActivityRecord[]> = {
+    '12001100367': [
+        { id: 'quiz_hist_1929', title: 'Quiz: A Crise de 1929', subject: 'História', score: 8, total: 10, completedAt: '2025-05-29T19:05:00Z', difficulty: QuizDifficulty.INTERMEDIARIO },
+        { id: 'quiz_geo_blocos', title: 'Quiz: Blocos Econômicos', subject: 'Geografia', score: 9, total: 10, completedAt: '2025-05-27T17:40:00Z', difficulty: QuizDifficulty.INICIANTE },
+        { id: 'quiz_bio_genetica', title: 'Quiz: Genética Molecular', subject: 'Biologia', score: 7, total: 10, completedAt: '2025-05-24T16:15:00Z', difficulty: QuizDifficulty.AVANCADO },
+    ],
+    '12001160937': [
+        { id: 'quiz_bio_leis_mendel', title: 'Quiz: Leis de Mendel', subject: 'Biologia', score: 8, total: 10, completedAt: '2025-05-30T12:35:00Z', difficulty: QuizDifficulty.INTERMEDIARIO },
+        { id: 'quiz_quimica_solucoes', title: 'Quiz: Soluções Químicas', subject: 'Química', score: 10, total: 10, completedAt: '2025-05-26T18:10:00Z', difficulty: QuizDifficulty.INTERMEDIARIO },
+    ],
+    '13101980120': [
+        { id: 'quiz_port_interpretacao', title: 'Quiz: Interpretação de Texto', subject: 'Português', score: 6, total: 10, completedAt: '2025-05-28T09:50:00Z', difficulty: QuizDifficulty.INICIANTE },
+        { id: 'quiz_geo_fontes_energia', title: 'Quiz: Fontes de Energia', subject: 'Geografia', score: 8, total: 10, completedAt: '2025-05-25T11:20:00Z', difficulty: QuizDifficulty.INTERMEDIARIO },
+        { id: 'quiz_hist_conflitos', title: 'Quiz: Conflitos Contemporâneos', subject: 'História', score: 9, total: 10, completedAt: '2025-05-22T20:05:00Z', difficulty: QuizDifficulty.AVANCADO },
+    ],
+};
 
 export const planning: CurriculumPlan[] = [
     {

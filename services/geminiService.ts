@@ -1,10 +1,11 @@
-
-
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Quiz, QuizDifficulty, QuizQuestion, VideoRecommendation, AnalysisData, GroundingChunk, SchoolGrade, Bimester, SchoolReportAnalysisResult, SubjectPerformance, Student } from '../types';
 import { GEMINI_MODEL_TEXT, DEFAULT_SUBJECT_PERFORMANCE_THRESHOLD, SCHOOL_GRADES_OPTIONS } from "../constants";
 
-let aiInstance: GoogleGenAI | null = null;
+type ApiVersion = "v1beta" | "v1";
+
+const aiInstances = new Map<string, GoogleGenerativeAI>();
+let apiKeyStatusLogged = false;
 
 // Rate limiting
 let lastRequestTime = 0;
@@ -74,62 +75,104 @@ async function retryWithBackoff<T>(
 }
 
 // Inicializa a instância da IA de forma preguiçosa (lazy) para evitar crash na inicialização
-function getAiInstance(): GoogleGenAI | null {
-  try {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY || process.env.API_KEY;
-    console.log("API Key encontrada:", apiKey ? "Sim" : "Não");
-    
-    if (!apiKey) {
-      console.warn("Nenhuma API key do Gemini encontrada - funcionalidade de IA desabilitada");
-      return null;
+function getConfiguredApiKeys(): { key: string; label: string }[] {
+  const configuredKeys: { key: string; label: string }[] = [];
+  const primaryKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY;
+  const backupKey = import.meta.env.VITE_GEMINI_API_KEY_BACKUP;
+
+  if (!apiKeyStatusLogged) {
+    console.log("🔑 API Key principal:", primaryKey ? `Sim (primeiros 10 chars: ${primaryKey.substring(0, 10)}...)` : "Não encontrada");
+    console.log("🔑 API Key backup:", backupKey ? `Sim (primeiros 10 chars: ${backupKey.substring(0, 10)}...)` : "Não encontrada");
+    if (!primaryKey && !backupKey) {
+      console.warn("⚠️ Nenhuma API key do Gemini encontrada - funcionalidade de IA desabilitada");
     }
-    
-    if (!aiInstance) {
-      aiInstance = new GoogleGenAI({ apiKey });
-      console.log("Instância do GoogleGenAI criada com sucesso");
-    }
-    return aiInstance;
-  } catch (error) {
-    console.error("Erro ao inicializar GoogleGenAI:", error);
-    return null;
+    apiKeyStatusLogged = true;
   }
+
+  if (primaryKey) {
+    configuredKeys.push({ key: primaryKey, label: "principal" });
+  }
+
+  if (backupKey && backupKey !== primaryKey) {
+    configuredKeys.push({ key: backupKey, label: "backup" });
+  }
+
+  return configuredKeys;
+}
+
+function getCachedClient(apiKey: string): GoogleGenerativeAI {
+  if (!aiInstances.has(apiKey)) {
+    const client = new GoogleGenerativeAI(apiKey);
+    aiInstances.set(apiKey, client);
+    console.log(`✅ Instância do GoogleGenerativeAI criada`);
+  }
+  return aiInstances.get(apiKey)!;
+}
+
+function getAvailableAiClients(): { client: GoogleGenerativeAI; label: string; requestOptions?: { apiVersion: ApiVersion } }[] {
+  const keys = getConfiguredApiKeys();
+  const clients: { client: GoogleGenerativeAI; label: string; requestOptions?: { apiVersion: ApiVersion } }[] = [];
+  const versions: ApiVersion[] = ["v1beta", "v1"];
+
+  for (const { key, label } of keys) {
+    for (const version of versions) {
+      try {
+        const client = getCachedClient(key);
+        const requestOptions = version === "v1beta" ? undefined : { apiVersion: version };
+        clients.push({ client, label: `${label} (${version})`, requestOptions });
+      } catch (error) {
+        console.error(`❌ Erro ao inicializar cliente ${label} (${version}):`, error);
+      }
+    }
+  }
+
+  return clients;
+}
+
+function isAiConfigured(): boolean {
+  return getConfiguredApiKeys().length > 0;
 }
 
 async function tryMultipleModels(prompt: string): Promise<string> {
-  const ai = getAiInstance();
-  if (!ai) {
-    throw new Error("IA não disponível - chave da API não configurada ou inválida");
+  const apiClients = getAvailableAiClients();
+
+  if (apiClients.length === 0) {
+    throw new Error("IA não disponível - nenhuma chave da API configurada");
   }
   
   const modelsToTry = [
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-preview-09-2025',
+    'gemini-flash-latest',
     'gemini-1.5-flash',
     'gemini-1.5-pro',
-    'gemini-1.0-pro',
-    'gemini-2.5-flash'
+    'gemini-1.0-pro'
   ];
   
-  for (const modelName of modelsToTry) {
-    try {
-      console.log(`Tentando modelo: ${modelName}`);
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: prompt
-      });
-      console.log(`Modelo ${modelName} funcionou!`);
-      return response.text;
-    } catch (error) {
-      console.warn(`Modelo ${modelName} falhou:`, error.message);
-      // Continua para o próximo modelo
+  // Tenta cada combinação de API key + modelo
+  for (const { client, label, requestOptions } of apiClients) {
+    for (const modelName of modelsToTry) {
+      try {
+        console.log(`Tentando modelo: ${modelName} com cliente ${label}`);
+        const model = client.getGenerativeModel({ model: modelName }, requestOptions);
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+        console.log(`✅ Modelo ${modelName} funcionou com cliente ${label}!`);
+        return text;
+      } catch (error: any) {
+        console.warn(`❌ Modelo ${modelName} com cliente ${label} falhou:`, error.message);
+        // Continua para o próximo modelo/chave
+      }
     }
   }
   
-  throw new Error("Todos os modelos do Gemini falharam. Funcionalidade de IA indisponível.");
+  throw new Error("Todos os modelos do Gemini falharam com todas as API keys. Funcionalidade de IA indisponível.");
 }
 
 export async function generateQuizForVideo(videoTitle: string, videoSubject: string, difficulty: QuizDifficulty): Promise<QuizQuestion[] | null> {
   // Verificar se IA está disponível antes de tentar usar
-  const ai = getAiInstance();
-  if (!ai) {
+  if (!isAiConfigured()) {
     console.log('IA não disponível, pulando geração de quiz');
     return null;
   }
@@ -178,8 +221,7 @@ Exemplo de formato para uma pergunta:
 
 export async function generateVideoJustification(video: VideoRecommendation, analysisData: AnalysisData): Promise<string> {
   // Verificar se IA está disponível antes de tentar usar
-  const ai = getAiInstance();
-  if (!ai) {
+  if (!isAiConfigured()) {
     console.log('IA não disponível, usando justificação padrão');
     return video.justification || "Vídeo recomendado para complementar seus estudos.";
   }
@@ -217,8 +259,7 @@ export async function generatePerformanceSummary(student: Student, analysisData:
   const studentFirstName = student.nome.split(' ')[0];
 
   // Verificar se IA está disponível antes de tentar usar
-  const ai = getAiInstance();
-  if (!ai) {
+  if (!isAiConfigured()) {
     console.log('IA não disponível, usando fallback inteligente');
     return generateFallbackSummary(student, analysisData);
   }
@@ -272,8 +313,7 @@ function generateFallbackSummary(student: Student, analysisData: AnalysisData): 
 
 export async function getInformationWithSearch(query: string): Promise<{ text: string; sources: GroundingChunk[] }> {
   // Verificar se IA está disponível antes de tentar usar
-  const ai = getAiInstance();
-  if (!ai) {
+  if (!isAiConfigured()) {
     console.log('IA não disponível, retornando mensagem padrão');
     return { text: "Informações não disponíveis no momento.", sources: [] };
   }

@@ -65,6 +65,22 @@ export interface Quiz {
   questions: QuizQuestion[];
 }
 
+export interface StudentVideoHistoryItem {
+  videoId: string;
+  watchedAt: string; // ISO date string
+  progress?: number; // 0-1 indicating how much of the video was assistido
+}
+
+export interface StudentActivityRecord {
+  id: string;
+  title: string;
+  subject: string;
+  score: number; // Nota obtida (0-total)
+  total: number; // Nota máxima
+  completedAt: string; // ISO date string
+  difficulty?: QuizDifficulty;
+}
+
 export interface UserProfile {
   name: string;
   email: string;
