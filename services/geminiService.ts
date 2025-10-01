@@ -104,7 +104,8 @@ async function tryMultipleModels(prompt: string): Promise<string> {
   const modelsToTry = [
     'gemini-1.5-flash',
     'gemini-1.5-pro',
-    'gemini-1.0-pro'
+    'gemini-1.0-pro',
+    'gemini-2.5-flash'
   ];
   
   for (const modelName of modelsToTry) {
