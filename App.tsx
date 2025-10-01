@@ -10,6 +10,8 @@ import VideoAdminPanel from './components/VideoAdminPanel';
 import { Student, VideoRecommendation, QuizDifficulty, QuizQuestion } from './types';
 import { generateQuizForVideo } from './services/geminiService';
 import Footer from './components/Footer';
+import StudentPerformancePanel from './components/StudentPerformancePanel';
+import { XCircleIcon } from './components/icons';
 
 export type View = 'home' | 'login' | 'dashboard';
 
@@ -27,13 +29,16 @@ export const App: React.FC = () => {
   const [currentQuizDifficulty, setCurrentQuizDifficulty] = useState<QuizDifficulty | null>(null);
   const [isQuizLoading, setIsQuizLoading] = useState(false);
 
+  const openProfile = useCallback(() => setIsProfileOpen(true), []);
+  const closeProfile = useCallback(() => setIsProfileOpen(false), []);
+
   const handleNavigate = (view: View) => {
     if (view === 'dashboard' && currentView === 'dashboard') {
       setDashboardKey(prevKey => prevKey + 1);
     }
     setCurrentView(view);
     if (view !== 'dashboard') {
-      setIsProfileOpen(false);
+      closeProfile();
     }
     window.scrollTo(0, 0); 
   };
@@ -47,7 +52,7 @@ export const App: React.FC = () => {
     setCurrentUser(null);
     setCurrentQuiz(null);
     setCurrentQuizVideo(null);
-    setIsProfileOpen(false);
+  closeProfile();
     handleNavigate('home');
   };
 
@@ -132,8 +137,7 @@ export const App: React.FC = () => {
             currentQuizDifficulty={currentQuizDifficulty}
             isQuizLoading={isQuizLoading}
             onReportVideoIssue={handleReportVideoIssue}
-            isProfileOpen={isProfileOpen}
-            onCloseProfile={() => setIsProfileOpen(false)}
+            onCloseProfile={closeProfile}
           />
         );
       default:
@@ -159,8 +163,42 @@ export const App: React.FC = () => {
         onNavigate={handleNavigate}
         currentUser={currentUser}
         onLogout={handleLogout}
-        onOpenProfile={currentUser ? () => setIsProfileOpen(true) : undefined}
+        onOpenProfile={currentUser ? openProfile : undefined}
       />
+      {isProfileOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={closeProfile}
+          />
+          <div className="relative z-10 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-gray-50 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6">
+              <div className="flex items-center justify-between gap-4">
+                <h3 className="text-2xl font-semibold text-brandDarkGray">Meu Perfil</h3>
+                <button
+                  type="button"
+                  onClick={closeProfile}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium text-brandDarkGray hover:bg-gray-200 transition"
+                  aria-label="Fechar Meu Perfil"
+                >
+                  <XCircleIcon className="w-5 h-5" /> Fechar
+                </button>
+              </div>
+
+              {currentUser ? (
+                <StudentPerformancePanel student={currentUser} />
+              ) : (
+                <div className="bg-white rounded-2xl shadow-md p-6 text-center space-y-3">
+                  <p className="text-lg font-semibold text-brandDarkGray">Faça login para ver seu perfil</p>
+                  <p className="text-sm text-gray-600">
+                    Assim que você acessar sua conta, o painel de desempenho ficará disponível em qualquer tela.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <main className="flex-grow">
         {renderView()}
       </main>

@@ -4,9 +4,8 @@ import { BIMESTER_OPTIONS } from '../constants';
 import { grades as allGrades } from '../studentData';
 import AnalysisResult from './AnalysisResult';
 import LoadingSpinner from './LoadingSpinner';
-import { ChartBarIcon, ArrowLeftIcon, LightBulbIcon, XCircleIcon } from './icons';
+import { ChartBarIcon, ArrowLeftIcon, LightBulbIcon } from './icons';
 import PerformanceChart from './PerformanceChart';
-import StudentPerformancePanel from './StudentPerformancePanel';
 import { generatePerformanceSummary } from '../services/geminiService';
 
 interface StudentDashboardProps {
@@ -17,8 +16,7 @@ interface StudentDashboardProps {
   currentQuizDifficulty: QuizDifficulty | null;
   isQuizLoading: boolean;
   onReportVideoIssue?: (videoId: string, issueType: string) => void;
-  isProfileOpen: boolean;
-  onCloseProfile: () => void;
+  onCloseProfile?: () => void;
 }
 
 const bimesterMap: { [key: string]: number } = {
@@ -46,8 +44,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = (props) => {
 
   const handleStartAnalysis = (event: React.FormEvent) => {
     event.preventDefault();
-  setIsProcessing(true);
-  props.onCloseProfile();
+    setIsProcessing(true);
+    props.onCloseProfile?.();
     setSummary('');
 
     setTimeout(async () => {
@@ -92,9 +90,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = (props) => {
 
   const handleBackToSelection = () => {
     setAnalysisStep('selection');
-  setAnalysisData(null);
-  setSummary('');
-  props.onCloseProfile();
+    setAnalysisData(null);
+    setSummary('');
+    props.onCloseProfile?.();
   };
 
   if (analysisStep === 'reinforcement' && analysisData) {
@@ -243,31 +241,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = (props) => {
           </form>
         </div>
       </div>
-      {props.isProfileOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={props.onCloseProfile}
-          />
-          <div className="relative z-10 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
-            <div className="bg-gray-50 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-semibold text-brandDarkGray">Meu Perfil</h3>
-                <button
-                  type="button"
-                  onClick={props.onCloseProfile}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium text-brandDarkGray hover:bg-gray-200 transition"
-                  aria-label="Fechar Meu Perfil"
-                >
-                  <XCircleIcon className="w-5 h-5" /> Fechar
-                </button>
-              </div>
-
-              <StudentPerformancePanel student={student} />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
